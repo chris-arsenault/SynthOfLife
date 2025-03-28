@@ -18,6 +18,20 @@ A creative VST3 audio generator plugin that combines Conway's Game of Life with 
 
 ## Changelog
 
+### Version 1.1.1 (March 28, 2025)
+
+#### MIDI Handling Improvements
+- **Improved Note Triggering Logic**: Refined rules for when cells trigger samples based on MIDI input
+- **Smarter Polyphony**: Only new cells trigger samples when already playing, existing cells continue without retriggering
+- **Better Note Transitions**: When changing notes while others are held, only pitch is updated without retriggering samples
+- **Clean Note Release**: All samples stop properly when all MIDI notes are released
+
+#### Technical Enhancements
+- Added `updatePitchForCell` method to update pitch without retriggering samples
+- Implemented `updatePitchOnly` method for smooth note transitions
+- Optimized cell state tracking for more musical playback behavior
+- Enhanced debug output for easier troubleshooting
+
 ### Version 1.1.0 (March 28, 2025)
 
 #### Major Improvements

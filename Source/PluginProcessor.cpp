@@ -211,6 +211,9 @@ void DrumMachineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             // Store the most recent MIDI note for pitch control
             mostRecentMidiNote = note;
             
+            // Check if this is the first note being pressed
+            bool isFirstNote = activeNotes.empty();
+            
             // Add note to active notes set
             activeNotes.insert(note);
             
@@ -222,22 +225,39 @@ void DrumMachineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             DBG("MIDI Note On: " + juce::String(note) + 
                 ", velocity: " + juce::String(velocity) + 
                 ", Game of Life enabled: " + juce::String(gameOfLifeEnabled ? "yes" : "no") +
-                ", Active notes: " + juce::String(activeNotes.size()));
+                ", Active notes: " + juce::String(activeNotes.size()) +
+                ", First note: " + juce::String(isFirstNote ? "yes" : "no"));
             
             // Force an immediate Game of Life update to respond to the note
             if (gameOfLifeEnabled)
             {
                 // Update the Game of Life grid
-                gameOfLife->update();
-                
-                // Check for active cells and trigger samples immediately after update
-                gameOfLife->checkAndTriggerSamples(
-                    drumPads, 
-                    ParameterManager::NUM_DRUM_PADS,
-                    [this](int col) { return parameterManager->getSampleForColumn(col); },
-                    [this](int col) { return parameterManager->getControlModeForColumn(col); },
-                    mostRecentMidiNote
-                );
+                if (isFirstNote)
+                {
+                    // For the first note, update the grid and trigger all active cells
+                    gameOfLife->update();
+                    
+                    // Check for active cells and trigger samples immediately after update
+                    gameOfLife->checkAndTriggerSamples(
+                        drumPads, 
+                        ParameterManager::NUM_DRUM_PADS,
+                        [this](int col) { return parameterManager->getSampleForColumn(col); },
+                        [this](int col) { return parameterManager->getControlModeForColumn(col); },
+                        mostRecentMidiNote
+                    );
+                }
+                else
+                {
+                    // For subsequent notes, only update the pitch of pitched columns
+                    // without retriggering all cells
+                    gameOfLife->updatePitchOnly(
+                        drumPads,
+                        ParameterManager::NUM_DRUM_PADS,
+                        [this](int col) { return parameterManager->getSampleForColumn(col); },
+                        [this](int col) { return parameterManager->getControlModeForColumn(col); },
+                        mostRecentMidiNote
+                    );
+                }
             }
         }
         // Handle MIDI note off messages
@@ -254,12 +274,27 @@ void DrumMachineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
                 gameOfLifeEnabled = false;
                 isNoteActive = false;
                 
-                DBG("All notes released, disabling Game of Life");
+                // Stop all samples when all notes are released
+                for (int i = 0; i < ParameterManager::NUM_DRUM_PADS; ++i)
+                {
+                    drumPads[i].stopSample();
+                }
+                
+                DBG("All notes released, disabling Game of Life and stopping all samples");
             }
             else
             {
                 // Update most recent MIDI note to the highest active note
                 mostRecentMidiNote = *activeNotes.rbegin();
+                
+                // Update the pitch of pitched columns without retriggering
+                gameOfLife->updatePitchOnly(
+                    drumPads,
+                    ParameterManager::NUM_DRUM_PADS,
+                    [this](int col) { return parameterManager->getSampleForColumn(col); },
+                    [this](int col) { return parameterManager->getControlModeForColumn(col); },
+                    mostRecentMidiNote
+                );
                 
                 DBG("Note off: " + juce::String(note) + 
                     ", still have " + juce::String(activeNotes.size()) + 

@@ -211,6 +211,44 @@ void DrumPad::triggerSampleWithPitchForCell(float velocity, int pitchShiftSemito
     }
 }
 
+void DrumPad::updatePitchForCell(int pitchShiftSemitones, int cellX, int cellY)
+{
+    // Only update if we have a sample loaded
+    if (sampleBuffer.getNumSamples() > 0)
+    {
+        // Find any voices associated with this cell
+        bool voiceFound = false;
+        
+        for (auto& voice : activeVoices)
+        {
+            if (voice.cellX == cellX && voice.cellY == cellY)
+            {
+                // Calculate new playback rate based on pitch shift
+                // Each semitone is a factor of 2^(1/12)
+                voice.playbackRate = std::pow(2.0f, pitchShiftSemitones / 12.0f);
+                
+                voiceFound = true;
+                
+                // Debug output
+                DBG("Updated pitch for cell (" + juce::String(cellX) + ", " + juce::String(cellY) + 
+                    ") with pitch shift: " + juce::String(pitchShiftSemitones));
+            }
+        }
+        
+        if (!voiceFound)
+        {
+            // Debug output if no voice was found for this cell
+            DBG("No active voice found for cell (" + juce::String(cellX) + ", " + juce::String(cellY) + 
+                ") to update pitch");
+        }
+    }
+    else
+    {
+        // Debug output if no sample is loaded
+        DBG("Cannot update pitch - no sample loaded");
+    }
+}
+
 void DrumPad::stopSampleForCell(int cellX, int cellY)
 {
     // Remove voices associated with the specified cell

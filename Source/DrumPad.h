@@ -26,6 +26,9 @@ public:
     // Trigger sample with pitch shift for a specific cell in the Game of Life grid
     void triggerSampleWithPitchForCell(float velocity, int pitchShiftSemitones, int cellX, int cellY);
     
+    // Update pitch for a specific cell in the Game of Life grid without retriggering
+    void updatePitchForCell(int pitchShiftSemitones, int cellX, int cellY);
+    
     // Stop all sample playback immediately
     void stopSample();
     

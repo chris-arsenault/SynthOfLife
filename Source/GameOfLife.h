@@ -45,6 +45,14 @@ public:
                                ModeMapFunc getControlModeForColumn,
                                int midiNoteOffset = 60);
     
+    // Update only the pitch of pitched columns without retriggering samples
+    template<typename SampleMapFunc, typename ModeMapFunc>
+    void updatePitchOnly(std::array<DrumPad, ParameterManager::NUM_DRUM_PADS>& drumPads, 
+                        int numPads,
+                        SampleMapFunc getSampleForColumn,
+                        ModeMapFunc getControlModeForColumn,
+                        int midiNoteOffset = 60);
+    
     // Check for deactivated cells and stop samples
     template<typename SampleMapFunc>
     void checkAndStopSamples(std::array<DrumPad, ParameterManager::NUM_DRUM_PADS>& drumPads, 
@@ -100,11 +108,16 @@ void GameOfLife::checkAndTriggerSamples(std::array<DrumPad, ParameterManager::NU
             
         for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
         {
-            // Trigger samples for all active cells, not just newly activated ones
-            if (grid[y][x])
+            // Trigger samples only for cells that have just been activated (current = true, previous = false)
+            // or for cells that are still active (current = true, previous = true) when it's the first note
+            bool justActivated = grid[y][x] && !previousGrid[y][x];
+            bool stillActive = grid[y][x] && previousGrid[y][x];
+            
+            if (justActivated || stillActive)
             {
                 // Debug output
-                DBG("Active cell at (" + juce::String(x) + ", " + juce::String(y) + 
+                DBG("Cell " + juce::String(justActivated ? "activated" : "still active") + 
+                    " at (" + juce::String(x) + ", " + juce::String(y) + 
                     ") mapped to sample index: " + juce::String(sampleIndex));
                 
                 // Get control mode for this column
@@ -116,9 +129,13 @@ void GameOfLife::checkAndTriggerSamples(std::array<DrumPad, ParameterManager::NU
                 // Trigger sample based on control mode
                 if (mode == ColumnControlMode::Velocity)
                 {
-                    // Trigger with velocity
-                    drumPads[sampleIndex].triggerSampleForCell(velocity, x, y);
-                    anySampleTriggered = true;
+                    // Only trigger if the cell was just activated
+                    if (justActivated)
+                    {
+                        // Trigger with velocity
+                        drumPads[sampleIndex].triggerSampleForCell(velocity, x, y);
+                        anySampleTriggered = true;
+                    }
                 }
                 else if (mode == ColumnControlMode::Pitch)
                 {
@@ -147,9 +164,20 @@ void GameOfLife::checkAndTriggerSamples(std::array<DrumPad, ParameterManager::NU
                         ", MIDI note offset: " + juce::String(noteOffsetFromC3) +
                         ", total pitch shift: " + juce::String(totalPitchShift));
                     
-                    // Trigger with total pitch shift
-                    drumPads[sampleIndex].triggerSampleWithPitchForCell(velocity, totalPitchShift, x, y);
-                    anySampleTriggered = true;
+                    // Only trigger if the cell was just activated
+                    if (justActivated)
+                    {
+                        // Trigger with total pitch shift
+                        drumPads[sampleIndex].triggerSampleWithPitchForCell(velocity, totalPitchShift, x, y);
+                        anySampleTriggered = true;
+                    }
+                    // For cells that are still active, update the pitch if needed
+                    else if (stillActive)
+                    {
+                        // Update pitch for still active cells (without retriggering)
+                        // This ensures the pitch follows the current MIDI note
+                        drumPads[sampleIndex].updatePitchForCell(totalPitchShift, x, y);
+                    }
                 }
             }
         }
@@ -212,5 +240,75 @@ void GameOfLife::checkAndStopSamples(std::array<DrumPad, ParameterManager::NUM_D
     else
     {
         DBG("No samples stopped for Game of Life grid update");
+    }
+}
+
+// Template implementation for updating only the pitch of pitched columns
+template<typename SampleMapFunc, typename ModeMapFunc>
+void GameOfLife::updatePitchOnly(std::array<DrumPad, ParameterManager::NUM_DRUM_PADS>& drumPads, 
+                               int numPads,
+                               SampleMapFunc getSampleForColumn,
+                               ModeMapFunc getControlModeForColumn,
+                               int midiNoteOffset)
+{
+    // Debug output
+    DBG("Updating pitch only for active cells in Game of Life grid");
+    
+    // Calculate MIDI note offset from C3 (60)
+    int noteOffsetFromC3 = midiNoteOffset - 60;
+    
+    // Check for active cells in each column
+    for (int x = 0; x < ParameterManager::GRID_SIZE; ++x)
+    {
+        // Get the sample index for this column
+        int sampleIndex = getSampleForColumn(x);
+        
+        // Skip if no sample is mapped to this column
+        if (sampleIndex < 0 || sampleIndex >= numPads)
+            continue;
+            
+        // Get control mode for this column
+        ColumnControlMode mode = getControlModeForColumn(x);
+        
+        // Only update pitch for columns in Pitch mode
+        if (mode == ColumnControlMode::Pitch)
+        {
+            for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
+            {
+                // Only update pitch for active cells
+                if (grid[y][x])
+                {
+                    // Calculate velocity based on y position (higher = louder)
+                    float velocity = static_cast<float>(y + 1) / static_cast<float>(ParameterManager::GRID_SIZE);
+                    
+                    // Get the current musical scale
+                    MusicalScale currentScale = parameterManager->getSelectedScale();
+                    
+                    // Invert y position so higher rows produce higher pitches
+                    int invertedY = ParameterManager::GRID_SIZE - y - 1;
+                    
+                    // Calculate pitch shift based on y position and the selected scale
+                    int scalePitchShift = ScaleUtility::getPitchShiftForPosition(
+                        currentScale, 
+                        invertedY, 
+                        ParameterManager::GRID_SIZE
+                    );
+                    
+                    // Add the MIDI note offset to the scale-based pitch shift
+                    int totalPitchShift = scalePitchShift + noteOffsetFromC3;
+                    
+                    // Debug output
+                    DBG("Updating pitch for cell (" + juce::String(x) + ", " + juce::String(y) + 
+                        ") with new MIDI note offset: " + juce::String(midiNoteOffset) +
+                        ", total pitch shift: " + juce::String(totalPitchShift));
+                    
+                    // Stop the previous sample for this cell
+                    drumPads[sampleIndex].stopSampleForCell(x, y);
+                    
+                    // Trigger with new pitch
+                    drumPads[sampleIndex].triggerSampleWithPitchForCell(velocity, totalPitchShift, x, y);
+                }
+            }
+        }
     }
 }
