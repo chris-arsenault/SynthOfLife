@@ -16,7 +16,6 @@ cmake .. -DCMAKE_VERBOSE_MAKEFILE=ON
 
 if %ERRORLEVEL% NEQ 0 (
     echo CMake configuration failed!
-    pause
     exit /b 1
 )
 
@@ -32,12 +31,9 @@ echo Build log saved to build_new\build_log.txt
 
 if %ERRORLEVEL% NEQ 0 (
     echo Build failed!
-    pause
     exit /b 1
 )
 
 echo Build complete!
 echo VST3 plugin can be found in: build_new\SynthOfLife_artefacts\Release\VST3\Synth of Life.vst3
 echo Standalone application can be found in: build_new\SynthOfLife_artefacts\Release\Standalone\Synth of Life.exe
-
-pause

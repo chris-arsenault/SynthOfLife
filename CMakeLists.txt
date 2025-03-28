@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(SynthOfLife VERSION 1.1.1)
+project(SynthOfLife VERSION 1.2.0)
 
 # Include the JUCE CMake utilities
 add_subdirectory(JUCE)
@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 # Initialize JUCE
 juce_add_plugin(SynthOfLife
-    VERSION 1.1.1
+    VERSION 1.2.0
     COMPANY_NAME "Ahara"
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
@@ -34,9 +34,13 @@ target_sources(SynthOfLife
         Source/DrumPad.cpp
         Source/GameOfLife.cpp
         Source/ParameterManager.cpp
+        Source/Voice.cpp
+        Source/EnvelopeProcessor.cpp
+        Source/Grid.cpp
         Source/UI/DrumPadComponent.cpp
         Source/UI/GameOfLifeComponent.cpp
-        Source/UI/NoteActivityIndicator.cpp)
+        Source/UI/NoteActivityIndicator.cpp
+        Source/UI/SampleSettingsComponent.cpp)
 
 # Set include directories
 target_include_directories(SynthOfLife

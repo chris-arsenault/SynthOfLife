@@ -1,6 +1,6 @@
 # Synth of Life
 
-A creative VST3 audio generator plugin that combines Conway's Game of Life with sample playback and MIDI-controlled synthesis. The plugin creates evolving, generative audio patterns based on cellular automata rules, providing a unique and interactive sound design tool.
+A creative VST3 audio generator plugin that combines Conway's Game of Life with sample playback and MIDI-controlled synthesis. The plugin creates evolving, generative audio patterns based on cellular automata rules, providing a unique and interactive sound design tool for musical exploration.
 
 ## Features
 
@@ -12,11 +12,28 @@ A creative VST3 audio generator plugin that combines Conway's Game of Life with 
 - Column mapping system to assign different samples to grid columns
 - Velocity and pitch control modes for expressive sample playback
 - Position-based pitch shifting for melodic patterns
+- Musical scale-aware pitch mapping for harmonious output
+- Independent ADSR envelopes for each voice
+- True polyphony with proper voice management
 - Visual note activity indicator
 - Waveform display for audio output visualization
 - Available as VST3 and Standalone application
 
 ## Changelog
+
+### Version 1.2.0 (March 28, 2025)
+
+#### Musical Enhancements
+- **Scale-Aware Pitch Mapping**: Added support for multiple musical scales (Major, Minor, Harmonic Minor, Chromatic, Pentatonic, Blues)
+- **Row-Based Pitch Offsets**: Implemented pitch offsets based on row position (-7 to +8 semitones)
+- **Independent ADSR Envelopes**: Each voice now has its own ADSR envelope for more expressive sound design
+- **Improved Polyphony**: Fixed polyphony to properly maintain voices until they naturally end or are evicted due to polyphony limits
+
+#### Technical Improvements
+- Added `getPitchOffsetForRow` method to calculate scale-appropriate pitch offsets
+- Fixed sample rate handling for accurate ADSR timing across different host sample rates
+- Completely rewrote cell-based voice triggering for better polyphony management
+- Enhanced legato mode to properly track voices per cell
 
 ### Version 1.1.1 (March 28, 2025)
 
@@ -82,6 +99,7 @@ A creative VST3 audio generator plugin that combines Conway's Game of Life with 
 4. Watch as the Game of Life cells trigger samples based on their activation patterns
 5. Hold notes to create continuously evolving sound patterns
 6. Experiment with different initial grid patterns and sample mappings
+7. Try different musical scales to create harmonious melodic patterns
 
 ## Project Structure
 

@@ -62,6 +62,95 @@ public:
         return pitchShift;
     }
     
+    /**
+     * Snap a pitch shift value to the nearest note in a scale
+     * 
+     * @param pitchShift The pitch shift in semitones
+     * @param rootNote The root note of the scale (0-11, where 0 is C)
+     * @param scale The musical scale to use
+     * @return The pitch shift snapped to the scale
+     */
+    static int snapToScale(int pitchShift, int rootNote, MusicalScale scale)
+    {
+        // If chromatic scale, no snapping needed
+        if (scale == MusicalScale::Chromatic)
+            return pitchShift;
+            
+        // Get the scale pattern and number of notes
+        const int* scalePattern = getScalePattern(scale);
+        int numNotesInScale = getNumNotesInScale(scale);
+        
+        // Calculate the octave and note within the octave
+        int octave = pitchShift / 12;
+        int semitone = pitchShift % 12;
+        if (semitone < 0) {
+            semitone += 12;
+            octave--;
+        }
+        
+        // Adjust for root note
+        semitone = (semitone - rootNote + 12) % 12;
+        
+        // Build the scale degrees in semitones
+        int scaleDegrees[12] = { 0 }; // Initialize all to 0
+        int currentSemitone = 0;
+        
+        // Mark which semitones are in the scale
+        for (int i = 0; i < numNotesInScale; ++i)
+        {
+            scaleDegrees[currentSemitone] = 1;
+            currentSemitone = (currentSemitone + scalePattern[i]) % 12;
+        }
+        
+        // If the semitone is already in the scale, keep it
+        if (scaleDegrees[semitone] == 1)
+        {
+            // Convert back to absolute semitone
+            semitone = (semitone + rootNote) % 12;
+            return octave * 12 + semitone;
+        }
+        
+        // Find the nearest note in the scale
+        int lowerDist = 12;
+        int upperDist = 12;
+        
+        // Check lower notes
+        for (int i = 1; i <= 12; ++i)
+        {
+            int checkSemitone = (semitone - i + 12) % 12;
+            if (scaleDegrees[checkSemitone] == 1)
+            {
+                lowerDist = i;
+                break;
+            }
+        }
+        
+        // Check upper notes
+        for (int i = 1; i <= 12; ++i)
+        {
+            int checkSemitone = (semitone + i) % 12;
+            if (scaleDegrees[checkSemitone] == 1)
+            {
+                upperDist = i;
+                break;
+            }
+        }
+        
+        // Choose the closest note
+        if (lowerDist <= upperDist)
+        {
+            semitone = (semitone - lowerDist + 12) % 12;
+        }
+        else
+        {
+            semitone = (semitone + upperDist) % 12;
+        }
+        
+        // Convert back to absolute semitone
+        semitone = (semitone + rootNote) % 12;
+        return octave * 12 + semitone;
+    }
+    
 private:
     /**
      * Get the number of notes in a scale

@@ -41,54 +41,6 @@ GameOfLifeComponent::GameOfLifeComponent(ParameterManager& pm)
     intervalValueAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         paramManager.getAPVTS(), "intervalValue", intervalValueBox);
     
-    // Initialize column mapping label
-    mappingLabel.setText("Column Sample Mapping:", juce::dontSendNotification);
-    mappingLabel.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::bold));
-    addAndMakeVisible(mappingLabel);
-    
-    // Initialize column control mode label
-    modeLabel.setText("Column Control Mode:", juce::dontSendNotification);
-    modeLabel.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::bold));
-    addAndMakeVisible(modeLabel);
-    
-    // Initialize pitch range label
-    pitchRangeLabel.setText("Pitch Range: -7 to +8 semitones", juce::dontSendNotification);
-    pitchRangeLabel.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 12.0f, juce::Font::plain));
-    addAndMakeVisible(pitchRangeLabel);
-    
-    // Initialize column mapping combo boxes
-    for (int i = 0; i < ParameterManager::GRID_SIZE; ++i)
-    {
-        // Create column mapper combo box
-        columnMappers[i] = std::make_unique<juce::ComboBox>("Column " + juce::String(i + 1) + " Mapping");
-        columnMappers[i]->addItem("None", 1);
-        
-        for (int j = 0; j < ParameterManager::NUM_DRUM_PADS; ++j)
-        {
-            columnMappers[i]->addItem("Sample " + juce::String(j + 1), j + 2);
-        }
-        
-        columnMappers[i]->setSelectedItemIndex(0);
-        columnMappers[i]->addListener(this);
-        addAndMakeVisible(columnMappers[i].get());
-        
-        // Create attachment
-        columnMapperAttachments[i] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-            paramManager.getAPVTS(), "colMap" + juce::String(i), *columnMappers[i]);
-            
-        // Create column control mode combo box
-        columnControlModes[i] = std::make_unique<juce::ComboBox>("Column " + juce::String(i + 1) + " Mode");
-        columnControlModes[i]->addItem("Velocity", 1);
-        columnControlModes[i]->addItem("Pitch", 2);
-        columnControlModes[i]->setSelectedItemIndex(0);
-        columnControlModes[i]->addListener(this);
-        addAndMakeVisible(columnControlModes[i].get());
-        
-        // Create attachment
-        columnControlModeAttachments[i] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-            paramManager.getAPVTS(), "colMode" + juce::String(i), *columnControlModes[i]);
-    }
-    
     // Create parameter attachments
     randomizeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         paramManager.getAPVTS(), "golRandomize", randomizeButton);
@@ -104,77 +56,85 @@ GameOfLifeComponent::~GameOfLifeComponent()
 
 void GameOfLifeComponent::paint(juce::Graphics& g)
 {
-    // Fill background
-    g.fillAll(juce::Colours::darkgrey);
+    // Fill the background
+    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
     
-    // Draw grid
+    // Draw the Game of Life grid
     if (gameOfLife != nullptr)
     {
-        // Calculate cell size based on the width of the combo boxes
-        int cellSize = getWidth() / ParameterManager::GRID_SIZE;
+        // Calculate the grid size
+        auto area = getLocalBounds().reduced(10);
+        int gridSize = juce::jmin(area.getWidth(), area.getHeight() - 100); // Reserve space for controls
+        int cellSize = gridSize / ParameterManager::GRID_SIZE;
         
-        // Draw each cell
-        for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
+        // Center the grid horizontally
+        int gridX = (getWidth() - (cellSize * ParameterManager::GRID_SIZE)) / 2;
+        
+        // Position the grid below the controls
+        int gridY = 100; // Approximate space used by controls
+        
+        // Draw the grid
+        for (int x = 0; x < ParameterManager::GRID_SIZE; ++x)
         {
-            for (int x = 0; x < ParameterManager::GRID_SIZE; ++x)
+            for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
             {
-                bool alive = gameOfLife->getCellState(x, y);
-                drawCell(g, x, y, alive, cellSize);
+                bool cellState = gameOfLife->getCellState(x, y);
+                drawCell(g, x, y, cellState, cellSize);
             }
+        }
+        
+        // Draw grid lines
+        g.setColour(juce::Colours::grey);
+        
+        // Draw horizontal grid lines
+        for (int y = 0; y <= ParameterManager::GRID_SIZE; ++y)
+        {
+            g.drawLine(gridX, gridY + y * cellSize, 
+                      gridX + ParameterManager::GRID_SIZE * cellSize, gridY + y * cellSize);
+        }
+        
+        // Draw vertical grid lines
+        for (int x = 0; x <= ParameterManager::GRID_SIZE; ++x)
+        {
+            g.drawLine(gridX + x * cellSize, gridY, 
+                      gridX + x * cellSize, gridY + ParameterManager::GRID_SIZE * cellSize);
         }
     }
 }
 
 void GameOfLifeComponent::resized()
 {
-    auto area = getLocalBounds();
+    // Calculate the available area
+    auto area = getLocalBounds().reduced(10);
     
-    // Calculate the column width based on the total width
-    int columnWidth = area.getWidth() / ParameterManager::GRID_SIZE;
+    // Calculate the grid size
+    int gridSize = juce::jmin(area.getWidth(), area.getHeight() - 100); // Reserve space for controls
+    int cellSize = gridSize / ParameterManager::GRID_SIZE;
     
-    // Position MIDI control label at the top
-    auto midiControlLabelArea = area.removeFromTop(30);
-    midiControlLabel.setBounds(midiControlLabelArea);
+    // Center the grid horizontally
+    int gridX = (getWidth() - (cellSize * ParameterManager::GRID_SIZE)) / 2;
     
-    // Position buttons at the top
+    // Position the MIDI control label at the top
+    auto labelArea = area.removeFromTop(30);
+    midiControlLabel.setBounds(labelArea);
+    
+    // Position the randomize button
     auto buttonArea = area.removeFromTop(30);
-    randomizeButton.setBounds(buttonArea.removeFromLeft(100));
+    randomizeButton.setBounds(buttonArea.withWidth(120));
+    
+    // Position the interval controls
+    auto intervalArea = area.removeFromTop(30);
     
     // Layout for interval label
-    auto intervalLabelArea = area.removeFromTop(20);
+    auto intervalLabelArea = intervalArea.removeFromLeft(120);
     intervalLabel.setBounds(intervalLabelArea);
     
     // Layout for interval type combo box
-    auto intervalTypeArea = area.removeFromTop(30);
-    intervalTypeBox.setBounds(intervalTypeArea.removeFromLeft(100));
+    auto intervalTypeArea = intervalArea;
+    intervalTypeBox.setBounds(intervalTypeArea.removeFromLeft(150));
     
     // Layout for interval value combo box
     intervalValueBox.setBounds(intervalTypeArea.removeFromLeft(150));
-    
-    // Layout for column mapping label
-    auto labelArea = area.removeFromTop(20);
-    mappingLabel.setBounds(labelArea);
-    
-    // Layout for column mapping combo boxes
-    auto mapperArea = area.removeFromTop(30);
-    
-    for (int i = 0; i < ParameterManager::GRID_SIZE; ++i)
-    {
-        columnMappers[i]->setBounds(i * columnWidth, mapperArea.getY(), columnWidth - 4, 30);
-    }
-    
-    // Layout for column control mode label
-    auto modeLabelArea = area.removeFromTop(20);
-    modeLabel.setBounds(modeLabelArea);
-    pitchRangeLabel.setBounds(modeLabelArea.translated(300, 0).withWidth(200));
-    
-    // Layout for column control mode combo boxes
-    auto modeArea = area.removeFromTop(30);
-    
-    for (int i = 0; i < ParameterManager::GRID_SIZE; ++i)
-    {
-        columnControlModes[i]->setBounds(i * columnWidth, modeArea.getY(), columnWidth - 4, 30);
-    }
     
     // Reserve space for the grid (rest of the component)
     // The grid will be drawn in the paint method
@@ -182,16 +142,20 @@ void GameOfLifeComponent::resized()
 
 void GameOfLifeComponent::mouseDown(const juce::MouseEvent& e)
 {
-    if (gameOfLife == nullptr)
-        return;
-        
-    // Get cell coordinates from mouse position
-    int x, y;
-    if (getCellCoordinates(e.getPosition(), x, y))
+    // Check if the Game of Life model is available
+    if (gameOfLife != nullptr)
     {
-        // Toggle cell state
-        gameOfLife->toggleCellState(x, y);
-        repaint();
+        // Get the cell coordinates from the mouse position
+        int x, y;
+        if (getCellCoordinates(e.getPosition(), x, y))
+        {
+            // Toggle the cell state
+            bool currentState = gameOfLife->getCellState(x, y);
+            gameOfLife->setCellState(x, y, !currentState);
+            
+            // Trigger a repaint
+            repaint();
+        }
     }
 }
 
@@ -219,37 +183,42 @@ void GameOfLifeComponent::timerCallback()
     if (gameOfLife == nullptr)
         return;
         
-    // Check if Game of Life is enabled
-    if (paramManager.getGameOfLifeEnabledParam()->get())
-    {
-        // Update Game of Life
-        gameOfLife->update();
+    // Get the processor
+    auto* processor = dynamic_cast<DrumMachineAudioProcessor*>(paramManager.getProcessor());
+    if (processor == nullptr)
+        return;
         
-        // Repaint if grid has updated
-        if (gameOfLife->hasUpdated())
-        {
-            gameOfLife->setHasUpdated(false);
-            repaint();
-        }
-    }
+    // Always repaint to update the UI
+    repaint();
 }
 
 bool GameOfLifeComponent::getCellCoordinates(const juce::Point<int>& position, int& x, int& y)
 {
-    // Calculate cell size
-    int cellSize = getWidth() / ParameterManager::GRID_SIZE;
+    // Calculate the grid size
+    auto area = getLocalBounds().reduced(10);
+    int gridSize = juce::jmin(area.getWidth(), area.getHeight() - 100); // Reserve space for controls
+    int cellSize = gridSize / ParameterManager::GRID_SIZE;
     
-    // Calculate grid area - starts after the controls
-    int controlsHeight = 210; // Approximate height of all controls
-    juce::Rectangle<int> gridArea(0, controlsHeight, cellSize * ParameterManager::GRID_SIZE, getHeight() - controlsHeight);
+    // Center the grid horizontally
+    int gridX = (getWidth() - (cellSize * ParameterManager::GRID_SIZE)) / 2;
     
-    // Check if position is within grid area
-    if (gridArea.contains(position))
+    // Position the grid below the controls
+    int gridY = 100; // Approximate space used by controls
+    
+    // Calculate the grid bounds
+    juce::Rectangle<int> gridBounds(gridX, gridY, 
+                                    cellSize * ParameterManager::GRID_SIZE, 
+                                    cellSize * ParameterManager::GRID_SIZE);
+    
+    // Check if the position is within the grid
+    if (gridBounds.contains(position))
     {
-        // Calculate cell coordinates
-        x = position.getX() / cellSize;
-        y = (position.getY() - controlsHeight) / cellSize;
-        return true;
+        // Calculate the cell coordinates
+        x = (position.x - gridX) / cellSize;
+        y = (position.y - gridY) / cellSize;
+        
+        // Ensure the coordinates are within the grid
+        return (x >= 0 && x < ParameterManager::GRID_SIZE && y >= 0 && y < ParameterManager::GRID_SIZE);
     }
     
     return false;
@@ -257,46 +226,51 @@ bool GameOfLifeComponent::getCellCoordinates(const juce::Point<int>& position, i
 
 void GameOfLifeComponent::drawCell(juce::Graphics& g, int x, int y, bool alive, int cellSize)
 {
+    // Calculate the grid size
+    auto area = getLocalBounds().reduced(10);
+    int gridSize = juce::jmin(area.getWidth(), area.getHeight() - 100); // Reserve space for controls
+    
+    // Center the grid horizontally
+    int gridX = (getWidth() - (cellSize * ParameterManager::GRID_SIZE)) / 2;
+    
+    // Position the grid below the controls
+    int gridY = 100; // Approximate space used by controls
+    
     // Calculate cell position
-    int xPos = x * cellSize;
-    int yPos = 210 + (y * cellSize); // Start grid after controls
+    int cellX = gridX + x * cellSize;
+    int cellY = gridY + y * cellSize;
     
-    // Draw cell
-    juce::Rectangle<int> cellRect(xPos, yPos, cellSize, cellSize);
-    cellRect.reduce(1, 1); // Add a small gap between cells
-    
+    // Draw cell background
     if (alive)
     {
-        // Draw active cell
-        g.setColour(juce::Colours::lightgreen);
-        g.fillRect(cellRect);
+        // Get the sample index for this column
+        int sampleIndex = paramManager.getSampleForColumn(x);
         
-        // Add highlight
-        g.setColour(juce::Colours::white.withAlpha(0.3f));
-        g.drawLine(xPos + 1, yPos + 1, xPos + cellSize - 2, yPos + 1);
-        g.drawLine(xPos + 1, yPos + 1, xPos + 1, yPos + cellSize - 2);
+        // Choose color based on the sample index
+        juce::Colour cellColor;
         
-        // Add shadow
-        g.setColour(juce::Colours::black.withAlpha(0.3f));
-        g.drawLine(xPos + 1, yPos + cellSize - 2, xPos + cellSize - 2, yPos + cellSize - 2);
-        g.drawLine(xPos + cellSize - 2, yPos + 1, xPos + cellSize - 2, yPos + cellSize - 2);
+        if (sampleIndex >= 0)
+        {
+            // Use a color based on the sample index
+            float hue = (float)sampleIndex / ParameterManager::NUM_SAMPLES;
+            cellColor = juce::Colour::fromHSV(hue, 0.8f, 0.9f, 1.0f);
+        }
+        else
+        {
+            // Default color for unmapped columns
+            cellColor = juce::Colours::lightgreen;
+        }
+        
+        g.setColour(cellColor);
     }
     else
     {
-        // Draw inactive cell
-        g.setColour(juce::Colours::darkgrey.brighter(0.2f));
-        g.fillRect(cellRect);
-        
-        // Add border
-        g.setColour(juce::Colours::grey);
-        g.drawRect(cellRect);
+        g.setColour(juce::Colours::black);
     }
     
-    // Draw column indicator at the top row
-    if (y == 0)
-    {
-        g.setColour(juce::Colours::white);
-        g.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 12.0f, juce::Font::bold));
-        g.drawText(juce::String(x + 1), cellRect.withHeight(20).translated(0, -20), juce::Justification::centred, false);
-    }
+    g.fillRect(cellX + 1, cellY + 1, cellSize - 2, cellSize - 2);
+    
+    // Draw cell border
+    g.setColour(juce::Colours::grey);
+    g.drawRect(cellX, cellY, cellSize, cellSize, 1);
 }

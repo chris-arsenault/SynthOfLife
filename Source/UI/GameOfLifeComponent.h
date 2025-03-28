@@ -1,13 +1,17 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../GameOfLife.h"
 #include "../ParameterManager.h"
+#include "../GameOfLife.h"
+#include "../PluginProcessor.h"
 
+/**
+ * Component for displaying and interacting with the Game of Life grid
+ */
 class GameOfLifeComponent : public juce::Component,
-                            public juce::Button::Listener,
-                            public juce::Timer,
-                            public juce::ComboBox::Listener
+                             public juce::Button::Listener,
+                             public juce::Timer,
+                             public juce::ComboBox::Listener
 {
 public:
     GameOfLifeComponent(ParameterManager& paramManager);
@@ -29,6 +33,9 @@ public:
     // Set the GameOfLife model
     void setGameOfLife(GameOfLife* model) { gameOfLife = model; }
     
+    // Update the grid display
+    void updateGrid() { repaint(); }
+    
 private:
     ParameterManager& paramManager;
     GameOfLife* gameOfLife = nullptr;
@@ -43,16 +50,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> intervalTypeAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> intervalValueAttachment;
     
-    // Column mapping controls
-    juce::Label mappingLabel;
-    std::array<std::unique_ptr<juce::ComboBox>, ParameterManager::GRID_SIZE> columnMappers;
-    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, ParameterManager::GRID_SIZE> columnMapperAttachments;
-    
-    // Column control mode controls
-    juce::Label modeLabel;
-    juce::Label pitchRangeLabel;
-    std::array<std::unique_ptr<juce::ComboBox>, ParameterManager::GRID_SIZE> columnControlModes;
-    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, ParameterManager::GRID_SIZE> columnControlModeAttachments;
+    // Removed column mapping and control mode controls since they're now in the sample settings tabs
     
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> randomizeAttachment;
     

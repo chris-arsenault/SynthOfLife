@@ -16,41 +16,79 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     
-    // Default MIDI notes for drum pads (starting with GM drum map)
-    const int defaultMidiNotes[NUM_DRUM_PADS] = { 36, 38, 40, 41, 43, 45, 47, 49 };
+    // Default MIDI notes for samples (starting with GM drum map and extending)
+    const int defaultMidiNotes[NUM_SAMPLES] = { 36, 38, 40, 41, 43, 45, 47, 49, 50, 51, 52, 53, 54, 55, 56, 57 };
     
-    // Create parameters for each drum pad
-    for (int i = 0; i < NUM_DRUM_PADS; ++i)
+    // Create parameters for each sample
+    for (int i = 0; i < NUM_SAMPLES; ++i)
     {
         // Volume parameter
         layout.add(std::make_unique<juce::AudioParameterFloat>(
-            "volume" + juce::String(i),
-            "Pad " + juce::String(i + 1) + " Volume",
+            "volume_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Volume",
             0.0f, 1.0f, 0.8f));
             
         // Pan parameter
         layout.add(std::make_unique<juce::AudioParameterFloat>(
-            "pan" + juce::String(i),
-            "Pad " + juce::String(i + 1) + " Pan",
+            "pan_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Pan",
             -1.0f, 1.0f, 0.0f));
             
         // Mute parameter
         layout.add(std::make_unique<juce::AudioParameterBool>(
-            "mute" + juce::String(i),
-            "Pad " + juce::String(i + 1) + " Mute",
+            "mute_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Mute",
             false));
             
         // MIDI note parameter
         layout.add(std::make_unique<juce::AudioParameterInt>(
-            "note" + juce::String(i),
-            "Pad " + juce::String(i + 1) + " MIDI Note",
+            "midi_note_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " MIDI Note",
             0, 127, defaultMidiNotes[i]));
             
         // Polyphony parameter
         layout.add(std::make_unique<juce::AudioParameterInt>(
-            "poly" + juce::String(i),
-            "Pad " + juce::String(i + 1) + " Polyphony",
+            "polyphony_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Polyphony",
             1, 16, 4)); // Default to 4 voices
+            
+        // Control mode parameter
+        juce::StringArray controlModes;
+        controlModes.add("Velocity");
+        controlModes.add("Pitch");
+        
+        layout.add(std::make_unique<juce::AudioParameterChoice>(
+            "control_mode_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Control Mode",
+            controlModes,
+            0));
+            
+        // Legato mode parameter
+        layout.add(std::make_unique<juce::AudioParameterBool>(
+            "legato_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Legato Mode",
+            true)); // Default to true (current behavior)
+            
+        // ADSR parameters
+        layout.add(std::make_unique<juce::AudioParameterFloat>(
+            "attack_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Attack",
+            0.1f, 2000.0f, 10.0f));
+            
+        layout.add(std::make_unique<juce::AudioParameterFloat>(
+            "decay_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Decay",
+            0.1f, 2000.0f, 100.0f));
+            
+        layout.add(std::make_unique<juce::AudioParameterFloat>(
+            "sustain_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Sustain",
+            0.0f, 1.0f, 0.7f));
+            
+        layout.add(std::make_unique<juce::AudioParameterFloat>(
+            "release_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Release",
+            0.1f, 2000.0f, 200.0f));
     }
     
     // Interval parameters for Game of Life
@@ -69,17 +107,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
         intervalValueChoices,
         2)); // Default to 1/16th notes
     
-    // Game of Life parameters
-    layout.add(std::make_unique<juce::AudioParameterBool>(
-        "golEnabled",
-        "Game of Life Enabled",
-        false));
-        
-    layout.add(std::make_unique<juce::AudioParameterBool>(
-        "golRandomize",
-        "Game of Life Randomize",
-        false));
-        
     // Musical scale parameter
     juce::StringArray scaleChoices = { 
         "Major", 
@@ -95,35 +122,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
         "Musical Scale",
         scaleChoices,
         0)); // Default to Major scale
-        
-    // Column mapping parameters
-    for (int col = 0; col < GRID_SIZE; ++col)
-    {
-        juce::StringArray choices;
-        choices.add("None");
-        
-        for (int i = 0; i < NUM_DRUM_PADS; ++i)
-        {
-            choices.add("Pad " + juce::String(i + 1));
-        }
-        
-        layout.add(std::make_unique<juce::AudioParameterChoice>(
-            "colMap" + juce::String(col),
-            "Column " + juce::String(col + 1) + " Mapping",
-            choices,
-            0)); // Default to "None"
-            
-        // Column control mode parameters
-        juce::StringArray modeChoices;
-        modeChoices.add("Velocity");
-        modeChoices.add("Pitch");
-        
-        layout.add(std::make_unique<juce::AudioParameterChoice>(
-            "colMode" + juce::String(col),
-            "Column " + juce::String(col + 1) + " Mode",
-            modeChoices,
-            0)); // Default to "Velocity"
-    }
     
     return layout;
 }
@@ -131,62 +129,101 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
 void ParameterManager::initializeParameters()
 {
     // Store parameter pointers for easy access
-    for (int i = 0; i < NUM_DRUM_PADS; ++i)
+    for (int i = 0; i < NUM_SAMPLES; ++i)
     {
-        volumeParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("volume" + juce::String(i)));
-        panParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("pan" + juce::String(i)));
-        muteParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("mute" + juce::String(i)));
-        midiNoteParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("note" + juce::String(i)));
-        polyphonyParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("poly" + juce::String(i)));
+        volumeParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("volume_" + juce::String(i)));
+        panParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("pan_" + juce::String(i)));
+        muteParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("mute_" + juce::String(i)));
+        midiNoteParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midi_note_" + juce::String(i)));
+        polyphonyParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("polyphony_" + juce::String(i)));
+        controlModeParams[i] = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("control_mode_" + juce::String(i)));
+        legatoParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("legato_" + juce::String(i)));
+        attackParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("attack_" + juce::String(i)));
+        decayParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("decay_" + juce::String(i)));
+        sustainParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("sustain_" + juce::String(i)));
+        releaseParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("release_" + juce::String(i)));
     }
     
     intervalTypeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("intervalType"));
     intervalValueParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("intervalValue"));
     
-    gameOfLifeEnabledParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("golEnabled"));
-    gameOfLifeRandomizeParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("golRandomize"));
-    
     musicalScaleParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("musicalScale"));
-    
-    for (int col = 0; col < GRID_SIZE; ++col)
-    {
-        columnMappingParams[col] = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("colMap" + juce::String(col)));
-        columnControlModeParams[col] = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("colMode" + juce::String(col)));
-    }
 }
 
-juce::AudioParameterFloat* ParameterManager::getVolumeParam(int padIndex)
+juce::AudioParameterFloat* ParameterManager::getVolumeParam(int sampleIndex)
 {
-    if (padIndex >= 0 && padIndex < NUM_DRUM_PADS)
-        return volumeParams[padIndex];
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return volumeParams[sampleIndex];
     return nullptr;
 }
 
-juce::AudioParameterFloat* ParameterManager::getPanParam(int padIndex)
+juce::AudioParameterFloat* ParameterManager::getPanParam(int sampleIndex)
 {
-    if (padIndex >= 0 && padIndex < NUM_DRUM_PADS)
-        return panParams[padIndex];
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return panParams[sampleIndex];
     return nullptr;
 }
 
-juce::AudioParameterBool* ParameterManager::getMuteParam(int padIndex)
+juce::AudioParameterBool* ParameterManager::getMuteParam(int sampleIndex)
 {
-    if (padIndex >= 0 && padIndex < NUM_DRUM_PADS)
-        return muteParams[padIndex];
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return muteParams[sampleIndex];
     return nullptr;
 }
 
-juce::AudioParameterInt* ParameterManager::getMidiNoteParam(int padIndex)
+juce::AudioParameterInt* ParameterManager::getMidiNoteParam(int sampleIndex)
 {
-    if (padIndex >= 0 && padIndex < NUM_DRUM_PADS)
-        return midiNoteParams[padIndex];
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return midiNoteParams[sampleIndex];
     return nullptr;
 }
 
-juce::AudioParameterInt* ParameterManager::getPolyphonyParam(int padIndex)
+juce::AudioParameterInt* ParameterManager::getPolyphonyParam(int sampleIndex)
 {
-    if (padIndex >= 0 && padIndex < NUM_DRUM_PADS)
-        return polyphonyParams[padIndex];
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return polyphonyParams[sampleIndex];
+    return nullptr;
+}
+
+juce::AudioParameterChoice* ParameterManager::getControlModeParam(int sampleIndex)
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return controlModeParams[sampleIndex];
+    return nullptr;
+}
+
+juce::AudioParameterBool* ParameterManager::getLegatoParam(int sampleIndex)
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return legatoParams[sampleIndex];
+    return nullptr;
+}
+
+juce::AudioParameterFloat* ParameterManager::getAttackParam(int sampleIndex)
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return attackParams[sampleIndex];
+    return nullptr;
+}
+
+juce::AudioParameterFloat* ParameterManager::getDecayParam(int sampleIndex)
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return decayParams[sampleIndex];
+    return nullptr;
+}
+
+juce::AudioParameterFloat* ParameterManager::getSustainParam(int sampleIndex)
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return sustainParams[sampleIndex];
+    return nullptr;
+}
+
+juce::AudioParameterFloat* ParameterManager::getReleaseParam(int sampleIndex)
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return releaseParams[sampleIndex];
     return nullptr;
 }
 
@@ -200,14 +237,14 @@ juce::AudioParameterChoice* ParameterManager::getIntervalValueParam()
     return intervalValueParam;
 }
 
-juce::AudioParameterBool* ParameterManager::getGameOfLifeEnabledParam()
+juce::AudioParameterChoice* ParameterManager::getScaleParam()
 {
-    return gameOfLifeEnabledParam;
+    return musicalScaleParam;
 }
 
-juce::AudioParameterBool* ParameterManager::getGameOfLifeRandomizeParam()
+juce::AudioParameterChoice* ParameterManager::getRootNoteParam()
 {
-    return gameOfLifeRandomizeParam;
+    return nullptr; // This parameter doesn't exist yet, but we need the method
 }
 
 MusicalScale ParameterManager::getSelectedScale() const
@@ -222,16 +259,10 @@ MusicalScale ParameterManager::getSelectedScale() const
 
 int ParameterManager::getSampleForColumn(int column) const
 {
+    // Direct 1:1 mapping between columns and samples
     if (column >= 0 && column < GRID_SIZE)
     {
-        int mappingIndex = columnMappingParams[column]->getIndex();
-        
-        // Index 0 is "None"
-        if (mappingIndex == 0)
-            return -1;
-            
-        // Otherwise, it's (index - 1) because we added "None" at the beginning
-        return mappingIndex - 1;
+        return column; // Each column maps directly to the same-indexed sample
     }
     
     return -1; // Invalid column
@@ -239,11 +270,239 @@ int ParameterManager::getSampleForColumn(int column) const
 
 ColumnControlMode ParameterManager::getControlModeForColumn(int column) const
 {
-    if (column >= 0 && column < GRID_SIZE)
+    // Now each column directly maps to a sample
+    if (column >= 0 && column < NUM_SAMPLES)
     {
-        int modeIndex = columnControlModeParams[column]->getIndex();
-        return static_cast<ColumnControlMode>(modeIndex);
+        return getControlModeForSample(column);
     }
     
-    return ColumnControlMode::Velocity; // Default to velocity
+    // Default to velocity control
+    return ColumnControlMode::Velocity;
+}
+
+ColumnControlMode ParameterManager::getControlModeForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && controlModeParams[sampleIndex] != nullptr)
+    {
+        return static_cast<ColumnControlMode>(controlModeParams[sampleIndex]->getIndex());
+    }
+    
+    // Default to velocity control
+    return ColumnControlMode::Velocity;
+}
+
+bool ParameterManager::getLegatoForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && legatoParams[sampleIndex] != nullptr)
+    {
+        return legatoParams[sampleIndex]->get();
+    }
+    
+    // Default to true (legato mode enabled)
+    return true;
+}
+
+float ParameterManager::getVolumeForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && volumeParams[sampleIndex] != nullptr)
+    {
+        return volumeParams[sampleIndex]->get();
+    }
+    
+    // Default to 0.8 (80% volume)
+    return 0.8f;
+}
+
+float ParameterManager::getPanForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && panParams[sampleIndex] != nullptr)
+    {
+        return panParams[sampleIndex]->get();
+    }
+    
+    // Default to 0.0 (center)
+    return 0.0f;
+}
+
+bool ParameterManager::getMuteForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && muteParams[sampleIndex] != nullptr)
+    {
+        return muteParams[sampleIndex]->get();
+    }
+    
+    // Default to false (not muted)
+    return false;
+}
+
+int ParameterManager::getMidiNoteForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && midiNoteParams[sampleIndex] != nullptr)
+    {
+        return midiNoteParams[sampleIndex]->get();
+    }
+    
+    // Default to 60 (middle C)
+    return 60;
+}
+
+int ParameterManager::getPolyphonyForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && polyphonyParams[sampleIndex] != nullptr)
+    {
+        return polyphonyParams[sampleIndex]->get();
+    }
+    
+    // Default to 4 voices
+    return 4;
+}
+
+float ParameterManager::getAttackForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && attackParams[sampleIndex] != nullptr)
+    {
+        return attackParams[sampleIndex]->get();
+    }
+    
+    // Default attack
+    return 10.0f;
+}
+
+float ParameterManager::getDecayForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && decayParams[sampleIndex] != nullptr)
+    {
+        return decayParams[sampleIndex]->get();
+    }
+    
+    // Default decay
+    return 100.0f;
+}
+
+float ParameterManager::getSustainForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && sustainParams[sampleIndex] != nullptr)
+    {
+        return sustainParams[sampleIndex]->get();
+    }
+    
+    // Default sustain
+    return 0.7f;
+}
+
+float ParameterManager::getReleaseForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && releaseParams[sampleIndex] != nullptr)
+    {
+        return releaseParams[sampleIndex]->get();
+    }
+    
+    // Default release time
+    return 200.0f;
+}
+
+int ParameterManager::getPitchOffsetForRow(int row) const
+{
+    // Map row to a pitch offset in the range -7 to +8
+    // Row 0 (top) maps to +8, Row (GRID_SIZE-1) (bottom) maps to -7
+    
+    // Normalize the row position (invert it since we want top row to be highest pitch)
+    float normalizedRow = 1.0f - (static_cast<float>(row) / static_cast<float>(GRID_SIZE - 1));
+    
+    // Scale to the range -7 to +8 (16 possible values)
+    int rawOffset = static_cast<int>(normalizedRow * 15.0f) - 7;
+    
+    // Clamp to ensure we're in the correct range
+    int offset = juce::jlimit(-7, 8, rawOffset);
+    
+    // Apply scale mapping based on the selected musical scale
+    MusicalScale scale = getSelectedScale();
+    
+    // If we're using a chromatic scale, return the raw offset
+    if (scale == MusicalScale::Chromatic)
+    {
+        return offset;
+    }
+    
+    // Define scale patterns (semitone offsets from root)
+    // Each scale has a unique pattern of intervals
+    const int majorScale[7] = { 0, 2, 4, 5, 7, 9, 11 }; // Major scale: W-W-H-W-W-W-H
+    const int naturalMinorScale[7] = { 0, 2, 3, 5, 7, 8, 10 }; // Natural minor: W-H-W-W-H-W-W
+    const int harmonicMinorScale[7] = { 0, 2, 3, 5, 7, 8, 11 }; // Harmonic minor: W-H-W-W-H-WH-H
+    const int pentatonicScale[5] = { 0, 2, 4, 7, 9 }; // Major pentatonic: W-W-W½-W-W½
+    const int bluesScale[6] = { 0, 3, 5, 6, 7, 10 }; // Blues scale: W½-W-H-H-W½-W
+    
+    // Map the offset to the appropriate scale degree
+    int octaveOffset = 0;
+    int scaleIndex = 0;
+    
+    // Handle negative and positive offsets
+    if (offset < 0)
+    {
+        octaveOffset = -1 - ((-offset - 1) / 7);
+        scaleIndex = (-offset - 1) % 7;
+        if (scaleIndex < 0) scaleIndex += 7;
+    }
+    else
+    {
+        octaveOffset = offset / 7;
+        scaleIndex = offset % 7;
+    }
+    
+    // Get the scale degree based on the selected scale
+    int scaleDegree = 0;
+    
+    switch (scale)
+    {
+        case MusicalScale::Major:
+            scaleDegree = (scaleIndex < 7) ? majorScale[scaleIndex] : 12 + majorScale[scaleIndex - 7];
+            break;
+            
+        case MusicalScale::NaturalMinor:
+            scaleDegree = (scaleIndex < 7) ? naturalMinorScale[scaleIndex] : 12 + naturalMinorScale[scaleIndex - 7];
+            break;
+            
+        case MusicalScale::HarmonicMinor:
+            scaleDegree = (scaleIndex < 7) ? harmonicMinorScale[scaleIndex] : 12 + harmonicMinorScale[scaleIndex - 7];
+            break;
+            
+        case MusicalScale::Pentatonic:
+            // Handle pentatonic scale (5 notes per octave)
+            if (offset < 0)
+            {
+                octaveOffset = -1 - ((-offset - 1) / 5);
+                scaleIndex = (-offset - 1) % 5;
+                if (scaleIndex < 0) scaleIndex += 5;
+            }
+            else
+            {
+                octaveOffset = offset / 5;
+                scaleIndex = offset % 5;
+            }
+            scaleDegree = (scaleIndex < 5) ? pentatonicScale[scaleIndex] : 12 + pentatonicScale[scaleIndex - 5];
+            break;
+            
+        case MusicalScale::Blues:
+            // Handle blues scale (6 notes per octave)
+            if (offset < 0)
+            {
+                octaveOffset = -1 - ((-offset - 1) / 6);
+                scaleIndex = (-offset - 1) % 6;
+                if (scaleIndex < 0) scaleIndex += 6;
+            }
+            else
+            {
+                octaveOffset = offset / 6;
+                scaleIndex = offset % 6;
+            }
+            scaleDegree = (scaleIndex < 6) ? bluesScale[scaleIndex] : 12 + bluesScale[scaleIndex - 6];
+            break;
+            
+        default:
+            // Default to chromatic if something goes wrong
+            return offset;
+    }
+    
+    // Calculate the final pitch offset
+    return octaveOffset * 12 + scaleDegree;
 }

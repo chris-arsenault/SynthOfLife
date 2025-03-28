@@ -4,6 +4,7 @@
 #include "DrumPad.h"
 #include "GameOfLife.h"
 #include "ParameterManager.h"
+#include "UI/NoteActivityIndicator.h"
 
 //==============================================================================
 /**
@@ -60,6 +61,15 @@ public:
     // Process MIDI clock
     void processMidiClock();
     
+    // Process MIDI messages
+    void processMidiMessages(juce::MidiBuffer& midiMessages);
+    
+    // Process Game of Life
+    void processGameOfLife();
+    
+    // Check if any MIDI note is active
+    bool isAnyNoteActive() const { return !activeNotes.empty(); }
+    
     // Calculate interval in MIDI clock ticks
     int calculateIntervalInTicks();
     
@@ -68,9 +78,6 @@ public:
     
     // Get the Parameter Manager instance
     ParameterManager& getParameterManager() { return *parameterManager.get(); }
-    
-    // Check if a note is currently active
-    bool getNoteActiveStatus() const { return isNoteActive; }
     
     // Get the visualization buffer
     juce::AudioBuffer<float>& getVisualizationBuffer() { return visualizationBuffer; }
@@ -96,14 +103,37 @@ public:
         return buffer;
     }
     
-    // Drum pads array
-    std::array<DrumPad, ParameterManager::NUM_DRUM_PADS> drumPads;
+    // Set the audio visualizer component
+    void setAudioVisualizer(juce::AudioVisualiserComponent* visualizer) { audioVisualizer = visualizer; }
+    
+    // Set the note activity indicator component
+    void setNoteActivityIndicator(NoteActivityIndicator* indicator) { noteActivityIndicator = indicator; }
+    
+    // Notify listeners that the state has been loaded
+    void notifyStateLoaded();
+    
+    // Add a listener for state loading
+    class StateLoadedListener
+    {
+    public:
+        virtual ~StateLoadedListener() = default;
+        virtual void stateLoaded() = 0;
+    };
+    
+    void addStateLoadedListener(StateLoadedListener* listener);
+    void removeStateLoadedListener(StateLoadedListener* listener);
+    
+    // Drum pads (one for each sample)
+    std::array<DrumPad, ParameterManager::NUM_SAMPLES> drumPads;
     
     // Interval types and values
     enum class IntervalType { Normal, Dotted, Triplet };
     enum class IntervalValue { Quarter, Eighth, Sixteenth };
 
 private:
+    // Constants
+    static constexpr int MIDDLE_C = 60; // MIDI note number for middle C
+    
     // Parameter manager
     std::unique_ptr<ParameterManager> parameterManager;
     
@@ -113,23 +143,33 @@ private:
     // MIDI clock counter
     int midiClockCounter = 0;
     
+    // MIDI clock enabled flag
+    bool midiClockEnabled = false;
+    
+    // Game of Life last update time
+    double lastGameOfLifeUpdateTime = 0.0;
+    
     // Game of Life MIDI control state
     bool gameOfLifeEnabled = false;
     
-    // Note active indicator
-    bool isNoteActive = false;
-    
     // MIDI note tracking
-    int mostRecentMidiNote = 60; // Default to C3 (60)
-    
-    // Track active MIDI notes
     std::set<int> activeNotes;
+    int mostRecentMidiNote = MIDDLE_C;
     
     // Current BPM
     double currentBPM = 120.0;
     
     // Visualization buffer
     juce::AudioBuffer<float> visualizationBuffer { 1, 1024 };
+    
+    // Audio visualizer component
+    juce::AudioVisualiserComponent* audioVisualizer = nullptr;
+    
+    // Note activity indicator component
+    NoteActivityIndicator* noteActivityIndicator = nullptr;
+
+    // State loaded listeners
+    std::vector<StateLoadedListener*> stateLoadedListeners;
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DrumMachineAudioProcessor)

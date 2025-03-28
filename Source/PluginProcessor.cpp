@@ -1,5 +1,9 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "ParameterManager.h" // Added missing include directive
+
+// ColumnControlMode is defined at the global scope in ParameterManager.h
+// No using statement needed
 
 //==============================================================================
 DrumMachineAudioProcessor::DrumMachineAudioProcessor()
@@ -27,10 +31,13 @@ DrumMachineAudioProcessor::DrumMachineAudioProcessor()
     visualizationBuffer.setSize(1, 1024);
     visualizationBuffer.clear();
     
-    isNoteActive = false;
-    mostRecentMidiNote = 60; // Initialize to C3 (60) instead of 0
-    
+    // Initialize MIDI note tracking
     activeNotes = std::set<int>();
+    mostRecentMidiNote = MIDDLE_C; // Initialize to middle C
+    
+    midiClockEnabled = false;
+    
+    lastGameOfLifeUpdateTime = 0.0; // Initialize last update time
 }
 
 DrumMachineAudioProcessor::~DrumMachineAudioProcessor()
@@ -103,7 +110,7 @@ void DrumMachineAudioProcessor::changeProgramName (int index, const juce::String
 void DrumMachineAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     // Prepare all drum pads for playback
-    for (int i = 0; i < ParameterManager::NUM_DRUM_PADS; ++i)
+    for (int i = 0; i < ParameterManager::NUM_SAMPLES; ++i)
     {
         drumPads[i].prepareToPlay(sampleRate, samplesPerBlock);
         
@@ -115,7 +122,7 @@ void DrumMachineAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
         }
         
         // Debug output for sample paths
-        DBG("Pad " + juce::String(i) + " sample path: " + drumPads[i].getSamplePath());
+        DBG("Pad " + juce::String(i) + " sample path: " + drumPads[i].getFilePath());
     }
     
     // Initialize visualization buffer
@@ -134,6 +141,10 @@ void DrumMachineAudioProcessor::releaseResources()
 {
     // When playback stops, you can use this as an opportunity to free up any
     // spare memory, etc.
+    for (int i = 0; i < ParameterManager::NUM_SAMPLES; ++i)
+    {
+        drumPads[i].releaseResources();
+    }
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -168,251 +179,264 @@ void DrumMachineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // Clear output buffer
-    buffer.clear();
-    
-    // Update parameters for each drum pad
-    for (int i = 0; i < ParameterManager::NUM_DRUM_PADS; ++i)
-    {
-        auto* volumeParam = parameterManager->getVolumeParam(i);
-        auto* panParam = parameterManager->getPanParam(i);
-        auto* muteParam = parameterManager->getMuteParam(i);
-        auto* polyphonyParam = parameterManager->getPolyphonyParam(i);
-        
-        if (volumeParam != nullptr)
-            drumPads[i].setVolume(volumeParam->get());
-            
-        if (panParam != nullptr)
-            drumPads[i].setPan(panParam->get());
-            
-        if (muteParam != nullptr)
-            drumPads[i].setMuted(muteParam->get());
-            
-        if (polyphonyParam != nullptr)
-            drumPads[i].setPolyphony(polyphonyParam->get());
-    }
-    
-    // Check if we have MIDI messages
-    bool hasMidiMessages = !midiMessages.isEmpty();
+    // Clear any output channels that don't contain input data
+    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
+        buffer.clear (i, 0, buffer.getNumSamples());
     
     // Process MIDI messages
-    juce::MidiBuffer::Iterator it(midiMessages);
-    juce::MidiMessage message;
-    int samplePosition;
-
-    while (it.getNextEvent(message, samplePosition))
+    processMidiMessages(midiMessages);
+    
+    // If any notes are active, update the Game of Life based on tempo
+    if (isAnyNoteActive())
     {
-        // Handle MIDI note on messages
+        // Always use system time to ensure updates happen regardless of host play state
+        double currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+        double bpm = 120.0; // Default BPM
+        
+        // Try to get host tempo, but don't rely on host play state
+        juce::AudioPlayHead* playHead = getPlayHead();
+        juce::AudioPlayHead::CurrentPositionInfo posInfo;
+        
+        if (playHead != nullptr && playHead->getCurrentPosition(posInfo))
+        {
+            // Use host tempo if available
+            bpm = posInfo.bpm;
+        }
+        
+        // Calculate update interval based on tempo and settings
+        int intervalInTicks = calculateIntervalInTicks();
+        
+        // Convert MIDI ticks to seconds
+        // MIDI clock sends 24 ticks per quarter note (24 PPQN)
+        // But our intervalInTicks is calculated based on 960 PPQN (JUCE standard)
+        double secondsPerBeat = 60.0 / bpm;
+        double updateIntervalSeconds = secondsPerBeat * (intervalInTicks / 960.0);
+        
+        // Debug output
+        DBG("BPM: " + juce::String(bpm) + 
+            ", Interval in ticks: " + juce::String(intervalInTicks) + 
+            ", Update interval: " + juce::String(updateIntervalSeconds) + " seconds");
+        
+        // Check if it's time to update the grid
+        if (currentTime - lastGameOfLifeUpdateTime >= updateIntervalSeconds)
+        {
+            // Update the Game of Life
+            gameOfLife->update();
+            
+            // Update last update time
+            lastGameOfLifeUpdateTime = currentTime;
+            
+            // Process samples based on the updated grid state
+            processGameOfLife();
+            
+            // Debug output
+            DBG("Grid updated at time: " + juce::String(currentTime));
+        }
+    }
+    
+    // Update parameters for all drum pads
+    for (int i = 0; i < ParameterManager::NUM_SAMPLES; ++i)
+    {
+        // Update volume and pan
+        drumPads[i].setVolume(parameterManager->getVolumeForSample(i));
+        drumPads[i].setPan(parameterManager->getPanForSample(i));
+        
+        // Update ADSR parameters
+        float attack = parameterManager->getAttackForSample(i);
+        float decay = parameterManager->getDecayForSample(i);
+        float sustain = parameterManager->getSustainForSample(i);
+        float release = parameterManager->getReleaseForSample(i);
+        
+        drumPads[i].setEnvelopeParameters(attack, decay, sustain, release);
+    }
+    
+    // Clear the output buffer
+    buffer.clear();
+    
+    // Render audio for each drum pad
+    for (int i = 0; i < ParameterManager::NUM_SAMPLES; ++i)
+    {
+        // Skip muted samples
+        if (parameterManager->getMuteForSample(i))
+            continue;
+            
+        // Get temporary buffer for this drum pad
+        juce::AudioBuffer<float> tempBuffer(buffer.getNumChannels(), buffer.getNumSamples());
+        tempBuffer.clear();
+        
+        // Render audio for this drum pad
+        drumPads[i].renderNextBlock(tempBuffer, 0, tempBuffer.getNumSamples());
+        
+        // Add to main buffer
+        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+        {
+            buffer.addFrom(channel, 0, tempBuffer, channel, 0, tempBuffer.getNumSamples());
+        }
+    }
+    
+    // Copy audio data to visualization buffer
+    if (visualizationBuffer.getNumSamples() != buffer.getNumSamples())
+    {
+        visualizationBuffer.setSize(1, buffer.getNumSamples(), false, true, true);
+    }
+    
+    // Mix down all channels to mono for visualization
+    visualizationBuffer.clear();
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+    {
+        visualizationBuffer.addFrom(0, 0, buffer, channel, 0, buffer.getNumSamples(), 1.0f / buffer.getNumChannels());
+    }
+    
+    // Update the audio visualizer if available
+    if (audioVisualizer != nullptr)
+    {
+        audioVisualizer->pushBuffer(buffer);
+    }
+}
+
+void DrumMachineAudioProcessor::processMidiMessages(juce::MidiBuffer& midiMessages)
+{
+    for (const auto metadata : midiMessages)
+    {
+        auto message = metadata.getMessage();
+        
         if (message.isNoteOn())
         {
-            int note = message.getNoteNumber();
-            float velocity = message.getVelocity() / 127.0f;
+            int noteNumber = message.getNoteNumber();
             
             // Store the most recent MIDI note for pitch control
-            mostRecentMidiNote = note;
+            mostRecentMidiNote = noteNumber;
             
             // Check if this is the first note being pressed
-            bool isFirstNote = activeNotes.empty();
+            bool wasEmpty = activeNotes.empty();
             
-            // Add note to active notes set
-            activeNotes.insert(note);
-            
-            // Enable Game of Life when any note is pressed
-            gameOfLifeEnabled = true;
-            isNoteActive = true;
+            // Add to active notes set
+            activeNotes.insert(noteNumber);
             
             // Debug output
-            DBG("MIDI Note On: " + juce::String(note) + 
-                ", velocity: " + juce::String(velocity) + 
-                ", Game of Life enabled: " + juce::String(gameOfLifeEnabled ? "yes" : "no") +
-                ", Active notes: " + juce::String(activeNotes.size()) +
-                ", First note: " + juce::String(isFirstNote ? "yes" : "no"));
+            DBG("MIDI Note On: " + juce::String(noteNumber) + 
+                " (Pitch shift from middle C: " + juce::String(noteNumber - MIDDLE_C) + ")");
             
-            // Force an immediate Game of Life update to respond to the note
-            if (gameOfLifeEnabled)
+            // If this is the first note, initialize the Game of Life grid
+            // and set the lastGameOfLifeUpdateTime to current time
+            if (wasEmpty)
             {
-                // Update the Game of Life grid
-                if (isFirstNote)
-                {
-                    // For the first note, update the grid and trigger all active cells
-                    gameOfLife->update();
-                    
-                    // Check for active cells and trigger samples immediately after update
-                    gameOfLife->checkAndTriggerSamples(
-                        drumPads, 
-                        ParameterManager::NUM_DRUM_PADS,
-                        [this](int col) { return parameterManager->getSampleForColumn(col); },
-                        [this](int col) { return parameterManager->getControlModeForColumn(col); },
-                        mostRecentMidiNote
-                    );
-                }
-                else
-                {
-                    // For subsequent notes, only update the pitch of pitched columns
-                    // without retriggering all cells
-                    gameOfLife->updatePitchOnly(
-                        drumPads,
-                        ParameterManager::NUM_DRUM_PADS,
-                        [this](int col) { return parameterManager->getSampleForColumn(col); },
-                        [this](int col) { return parameterManager->getControlModeForColumn(col); },
-                        mostRecentMidiNote
-                    );
-                }
+                // Always use system time to ensure updates happen regardless of host play state
+                lastGameOfLifeUpdateTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+                
+                // Process samples based on the current grid state
+                processGameOfLife();
             }
         }
-        // Handle MIDI note off messages
         else if (message.isNoteOff())
         {
-            int note = message.getNoteNumber();
+            int noteNumber = message.getNoteNumber();
             
-            // Remove note from active notes set
-            activeNotes.erase(note);
-            
-            // Only disable Game of Life if all notes are released
-            if (activeNotes.empty())
-            {
-                gameOfLifeEnabled = false;
-                isNoteActive = false;
-                
-                // Stop all samples when all notes are released
-                for (int i = 0; i < ParameterManager::NUM_DRUM_PADS; ++i)
-                {
-                    drumPads[i].stopSample();
-                }
-                
-                DBG("All notes released, disabling Game of Life and stopping all samples");
-            }
-            else
-            {
-                // Update most recent MIDI note to the highest active note
-                mostRecentMidiNote = *activeNotes.rbegin();
-                
-                // Update the pitch of pitched columns without retriggering
-                gameOfLife->updatePitchOnly(
-                    drumPads,
-                    ParameterManager::NUM_DRUM_PADS,
-                    [this](int col) { return parameterManager->getSampleForColumn(col); },
-                    [this](int col) { return parameterManager->getControlModeForColumn(col); },
-                    mostRecentMidiNote
-                );
-                
-                DBG("Note off: " + juce::String(note) + 
-                    ", still have " + juce::String(activeNotes.size()) + 
-                    " active notes, new most recent: " + juce::String(mostRecentMidiNote));
-            }
+            // Remove from active notes set
+            activeNotes.erase(noteNumber);
         }
-        // Handle MIDI clock messages
         else if (message.isMidiClock())
         {
+            // Handle MIDI clock messages
             processMidiClock();
         }
-        // We still process MIDI start/stop/continue messages, but don't depend on them for simulation
-        else if (message.isMidiStart())
-        {
-            midiClockCounter = 0;
-        }
-        else if (message.isMidiStop())
-        {
-            // No action
-        }
-        else if (message.isMidiContinue())
-        {
-            // No action
-        }
     }
+}
+
+void DrumMachineAudioProcessor::processGameOfLife()
+{
+    // Process samples based on the current grid state
+    // (Grid updates are now handled in processBlock when notes are held)
     
-    // If we're in standalone mode or the host doesn't send MIDI clock,
-    // we need to manually increment the MIDI clock counter based on time
+    // Trigger samples based on active cells
+    for (int i = 0; i < ParameterManager::GRID_SIZE; ++i)
     {
-        // Get the current BPM from the host if available, or use default
-        double currentBPM = 120.0; // Default BPM
-        if (getPlayHead() != nullptr)
+        for (int j = 0; j < ParameterManager::GRID_SIZE; ++j)
         {
-            if (auto positionInfo = getPlayHead()->getPosition())
-            {
-                if (positionInfo->getBpm().hasValue())
-                {
-                    currentBPM = *positionInfo->getBpm();
-                }
-            }
-        }
-        
-        // Calculate samples per MIDI clock tick based on BPM
-        // At 120 BPM, a quarter note is 0.5 seconds
-        // So a MIDI clock tick happens every 0.5/24 = 0.0208 seconds
-        // At a sample rate of 44100, that's about 917 samples per MIDI clock tick
-        double quarterNoteTimeInSeconds = 60.0 / currentBPM;
-        double clockTickTimeInSeconds = quarterNoteTimeInSeconds / 24.0;
-        int samplesPerMidiClock = static_cast<int>(clockTickTimeInSeconds * getSampleRate());
-        
-        static int sampleCounter = 0;
-        
-        sampleCounter += buffer.getNumSamples();
-        
-        if (sampleCounter >= samplesPerMidiClock)
-        {
-            // Increment MIDI clock counter
-            midiClockCounter++;
-            sampleCounter -= samplesPerMidiClock;
+            // In the grid display, i is the row and j is the column
+            // But in the GameOfLifeComponent, x is the column and y is the row
+            // So we need to swap i and j to match the visual representation
+            int row = j;    // y in the visual grid
+            int column = i; // x in the visual grid
             
-            // Debug output
-            if (midiClockCounter % 24 == 0) // Log every quarter note
-            {
-                DBG("MIDI Clock: " + juce::String(midiClockCounter) + 
-                    ", Game of Life enabled: " + juce::String(gameOfLifeEnabled ? "yes" : "no") + 
-                    ", Note active: " + juce::String(isNoteActive ? "yes" : "no"));
-            }
+            // Map column directly to sample index
+            int sampleIndex = column % ParameterManager::NUM_SAMPLES;
             
-            // Process Game of Life update on MIDI clock tick if enabled
-            if (gameOfLifeEnabled && isNoteActive)
+            // Only process if not muted
+            if (!parameterManager->getMuteForSample(sampleIndex))
             {
-                // Calculate the interval for Game of Life updates based on interval settings
-                int gameOfLifeInterval = calculateIntervalInTicks();
+                // Calculate velocity based on position
+                float velocity = 0.5f + (static_cast<float>(row) / static_cast<float>(ParameterManager::GRID_SIZE)) * 0.5f;
                 
-                // Update the Game of Life state based on MIDI clock and the selected interval
-                if (midiClockCounter % gameOfLifeInterval == 0)
+                // Check column control mode
+                ColumnControlMode controlMode = parameterManager->getControlModeForColumn(column);
+                
+                // Get current cell state
+                bool currentState = gameOfLife->getCellState(i, j);
+                
+                // Check if cell just activated (went from off to on)
+                if (gameOfLife->cellJustActivated(i, j))
                 {
-                    // Debug output
-                    DBG("Updating Game of Life grid at MIDI clock: " + juce::String(midiClockCounter) +
-                        ", interval: " + juce::String(gameOfLifeInterval) +
-                        ", active notes: " + juce::String(activeNotes.size()));
+                    // Cell just turned on - trigger sample from beginning
+                    if (controlMode == ColumnControlMode::Pitch)
+                    {
+                        // Calculate pitch shift based on MIDI note and row position
+                        int basePitchShift = mostRecentMidiNote - MIDDLE_C;
+                        
+                        // Add row-based pitch offset using the selected scale
+                        int rowPitchOffset = parameterManager->getPitchOffsetForRow(row);
+                        
+                        // Combine the base pitch shift with the row-based offset
+                        int totalPitchShift = basePitchShift + rowPitchOffset;
+                        
+                        // Trigger with pitch shift for this specific cell
+                        drumPads[sampleIndex].triggerSampleWithPitchForCell(velocity, totalPitchShift, i, j);
+                    }
+                    else
+                    {
+                        // Default behavior (velocity control) for this specific cell
+                        drumPads[sampleIndex].triggerSampleForCell(velocity, i, j);
+                    }
+                }
+                // Check if cell remains on
+                else if (currentState && gameOfLife->wasCellActive(i, j))
+                {
+                    // Cell remains on
+                    bool isLegato = parameterManager->getLegatoForSample(sampleIndex);
                     
-                    // Update the Game of Life grid
-                    gameOfLife->update();
-                    
-                    // Check for newly activated cells and trigger samples immediately after update
-                    gameOfLife->checkAndTriggerSamples(
-                        drumPads, 
-                        ParameterManager::NUM_DRUM_PADS,
-                        [this](int col) { return parameterManager->getSampleForColumn(col); },
-                        [this](int col) { return parameterManager->getControlModeForColumn(col); },
-                        mostRecentMidiNote // Pass the most recent MIDI note for pitch control
-                    );
-                    
-                    // Check for deactivated cells and stop samples immediately
-                    gameOfLife->checkAndStopSamples(
-                        drumPads,
-                        ParameterManager::NUM_DRUM_PADS,
-                        [this](int col) { return parameterManager->getSampleForColumn(col); }
-                    );
+                    if (!isLegato)
+                    {
+                        // Not legato - retrigger sample from beginning
+                        if (controlMode == ColumnControlMode::Pitch)
+                        {
+                            // Calculate pitch shift based on MIDI note and row position
+                            int basePitchShift = mostRecentMidiNote - MIDDLE_C;
+                            
+                            // Add row-based pitch offset using the selected scale
+                            int rowPitchOffset = parameterManager->getPitchOffsetForRow(row);
+                            
+                            // Combine the base pitch shift with the row-based offset
+                            int totalPitchShift = basePitchShift + rowPitchOffset;
+                            
+                            // Trigger with pitch shift for this specific cell
+                            drumPads[sampleIndex].triggerSampleWithPitchForCell(velocity, totalPitchShift, i, j);
+                        }
+                        else
+                        {
+                            // Default behavior (velocity control) for this specific cell
+                            drumPads[sampleIndex].triggerSampleForCell(velocity, i, j);
+                        }
+                    }
+                    // If legato, continue playing the sample (do nothing)
+                }
+                // Check if cell just deactivated (went from on to off)
+                else if (gameOfLife->cellJustDeactivated(i, j))
+                {
+                    // Cell just turned off - stop sample with release for this specific cell
+                    drumPads[sampleIndex].stopSampleForCell(i, j);
                 }
             }
         }
-    }
-    
-    // Process audio for each drum pad
-    for (int i = 0; i < ParameterManager::NUM_DRUM_PADS; ++i)
-    {
-        // Process audio for this pad
-        drumPads[i].processAudio(buffer, 0, buffer.getNumSamples());
-    }
-    
-    // Copy data to visualization buffer
-    visualizationBuffer.clear();
-    if (buffer.getNumChannels() > 0 && buffer.getNumSamples() > 0)
-    {
-        int numSamples = juce::jmin(visualizationBuffer.getNumSamples(), buffer.getNumSamples());
-        visualizationBuffer.copyFrom(0, 0, buffer.getReadPointer(0), numSamples);
     }
 }
 
@@ -441,11 +465,17 @@ void DrumMachineAudioProcessor::getStateInformation (juce::MemoryBlock& destData
     
     // Store sample paths
     juce::XmlElement* samplesXml = rootXml.createNewChildElement("Samples");
-    for (int i = 0; i < ParameterManager::NUM_DRUM_PADS; ++i)
+    for (int i = 0; i < ParameterManager::NUM_SAMPLES; ++i)
     {
         juce::XmlElement* padXml = samplesXml->createNewChildElement("Pad");
         padXml->setAttribute("index", i);
-        padXml->setAttribute("path", drumPads[i].getSamplePath());
+        padXml->setAttribute("path", drumPads[i].getFilePath());
+        
+        // Store ADSR envelope parameters
+        padXml->setAttribute("attack", drumPads[i].getAttack());
+        padXml->setAttribute("decay", drumPads[i].getDecay());
+        padXml->setAttribute("sustain", drumPads[i].getSustain());
+        padXml->setAttribute("release", drumPads[i].getRelease());
     }
     
     // Write the XML to the memory block
@@ -482,32 +512,52 @@ void DrumMachineAudioProcessor::setStateInformation (const void* data, int sizeI
                 // Debug output
                 DBG("Loading sample for pad " + juce::String(index) + " from path: " + path);
                 
-                // Load the sample if the path is valid
-                if (index >= 0 && index < ParameterManager::NUM_DRUM_PADS && path.isNotEmpty())
+                // Load the sample file if it exists
+                if (index >= 0 && index < ParameterManager::NUM_SAMPLES && path.isNotEmpty())
                 {
                     juce::File sampleFile(path);
                     if (sampleFile.existsAsFile())
                     {
-                        DBG("File exists, loading sample...");
                         drumPads[index].loadSample(sampleFile);
-                        // Store the path for future reference
-                        drumPads[index].setSamplePath(path);
                     }
                     else
                     {
                         DBG("File does not exist: " + path);
                     }
                 }
+                
+                // Restore ADSR envelope parameters
+                if (index >= 0 && index < ParameterManager::NUM_SAMPLES)
+                {
+                    float attack = padXml->getDoubleAttribute("attack", 10.0);
+                    float decay = padXml->getDoubleAttribute("decay", 100.0);
+                    float sustain = padXml->getDoubleAttribute("sustain", 0.7);
+                    float release = padXml->getDoubleAttribute("release", 200.0);
+                    
+                    // Debug output for ADSR values
+                    DBG("Loading ADSR for pad " + juce::String(index) + 
+                        ": A=" + juce::String(attack) + 
+                        ", D=" + juce::String(decay) + 
+                        ", S=" + juce::String(sustain) + 
+                        ", R=" + juce::String(release));
+                    
+                    // Set the ADSR parameters
+                    drumPads[index].setAttack(attack);
+                    drumPads[index].setDecay(decay);
+                    drumPads[index].setSustain(sustain);
+                    drumPads[index].setRelease(release);
+                }
+            }
+            
+            // Notify listeners that state has been loaded
+            for (auto* listener : stateLoadedListeners)
+            {
+                if (listener != nullptr)
+                {
+                    listener->stateLoaded();
+                }
             }
         }
-        else
-        {
-            DBG("No samples XML found in state");
-        }
-    }
-    else
-    {
-        DBG("Invalid or missing root XML element in state");
     }
 }
 
@@ -516,7 +566,7 @@ void DrumMachineAudioProcessor::setStateInformation (const void* data, int sizeI
 
 void DrumMachineAudioProcessor::triggerSample(int padIndex, float velocity)
 {
-    if (padIndex >= 0 && padIndex < ParameterManager::NUM_DRUM_PADS)
+    if (padIndex >= 0 && padIndex < ParameterManager::NUM_SAMPLES)
     {
         drumPads[padIndex].triggerSample(velocity);
     }
@@ -524,7 +574,7 @@ void DrumMachineAudioProcessor::triggerSample(int padIndex, float velocity)
 
 void DrumMachineAudioProcessor::triggerSampleWithPitch(int padIndex, float velocity, int pitchShiftSemitones)
 {
-    if (padIndex >= 0 && padIndex < ParameterManager::NUM_DRUM_PADS)
+    if (padIndex >= 0 && padIndex < ParameterManager::NUM_SAMPLES)
     {
         drumPads[padIndex].triggerSampleWithPitch(velocity, pitchShiftSemitones);
     }
@@ -538,7 +588,7 @@ void DrumMachineAudioProcessor::processMidiClock()
 
 int DrumMachineAudioProcessor::calculateIntervalInTicks()
 {
-    // MIDI clock sends 24 ticks per quarter note
+    // JUCE uses 960 PPQN (Pulses Per Quarter Note) standard
     
     // Get interval value
     IntervalValue intervalValue = static_cast<IntervalValue>(
@@ -554,19 +604,19 @@ int DrumMachineAudioProcessor::calculateIntervalInTicks()
     switch (intervalValue)
     {
         case IntervalValue::Quarter:
-            baseTicks = 24; // 24 ticks per quarter note
+            baseTicks = 960; // 960 ticks per quarter note
             break;
             
         case IntervalValue::Eighth:
-            baseTicks = 12; // 12 ticks per eighth note
+            baseTicks = 480; // 480 ticks per eighth note
             break;
             
         case IntervalValue::Sixteenth:
-            baseTicks = 6; // 6 ticks per sixteenth note
+            baseTicks = 240; // 240 ticks per sixteenth note
             break;
             
         default:
-            baseTicks = 6; // Default to sixteenth notes
+            baseTicks = 240; // Default to sixteenth notes
             break;
     }
     
@@ -584,6 +634,33 @@ int DrumMachineAudioProcessor::calculateIntervalInTicks()
             
         default:
             return baseTicks;
+    }
+}
+
+void DrumMachineAudioProcessor::notifyStateLoaded()
+{
+    // Notify all listeners that the state has been loaded
+    for (auto* listener : stateLoadedListeners)
+    {
+        if (listener != nullptr)
+            listener->stateLoaded();
+    }
+}
+
+void DrumMachineAudioProcessor::addStateLoadedListener(StateLoadedListener* listener)
+{
+    if (listener != nullptr && std::find(stateLoadedListeners.begin(), stateLoadedListeners.end(), listener) == stateLoadedListeners.end())
+    {
+        stateLoadedListeners.push_back(listener);
+    }
+}
+
+void DrumMachineAudioProcessor::removeStateLoadedListener(StateLoadedListener* listener)
+{
+    auto it = std::find(stateLoadedListeners.begin(), stateLoadedListeners.end(), listener);
+    if (it != stateLoadedListeners.end())
+    {
+        stateLoadedListeners.erase(it);
     }
 }
 
