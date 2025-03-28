@@ -1,0 +1,89 @@
+# Build directories
+/build/
+/build_new/
+/Builds/
+/JuceLibraryCode/
+
+# JUCE library
+/JUCE/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.cmake
+!CMakeLists.txt
+
+# Visual Studio files
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.user
+*.userosscache
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+ipch/
+x64/
+x86/
+Debug/
+Release/
+*.pdb
+*.ilk
+*.aps
+
+# macOS files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Plugin specific files
+*.vst
+*.vst3
+*.component
+*.au
+*.aax
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*~
+
+# Dependency directories
+/packages/
+/vendor/
+
+# Log files
+*.log
