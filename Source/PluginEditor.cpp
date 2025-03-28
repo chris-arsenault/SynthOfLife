@@ -11,11 +11,33 @@ DrumMachineAudioProcessorEditor::DrumMachineAudioProcessorEditor (DrumMachineAud
       gameOfLifeComponent(p.getParameterManager()),
       drumPadComponent(p.getParameterManager()),
       waveformVisualizer(2),
-      noteActivityIndicator() // Added noteActivityIndicator member variable
+      noteActivityIndicator(),
+      scaleSelector(),
+      scaleSelectorLabel()
 {
     // Connect UI components to their models
     gameOfLifeComponent.setGameOfLife(&p.getGameOfLife());
     drumPadComponent.setDrumPads(p.drumPads.data());
+    
+    // Set up the scale selector
+    addAndMakeVisible(scaleSelector);
+    addAndMakeVisible(scaleSelectorLabel);
+    
+    scaleSelectorLabel.setText("Musical Scale:", juce::dontSendNotification);
+    scaleSelectorLabel.setJustificationType(juce::Justification::right);
+    scaleSelectorLabel.attachToComponent(&scaleSelector, true);
+    
+    // Add scale options to the combobox
+    scaleSelector.addItem("Major", 1);
+    scaleSelector.addItem("Natural Minor", 2);
+    scaleSelector.addItem("Harmonic Minor", 3);
+    scaleSelector.addItem("Chromatic", 4);
+    scaleSelector.addItem("Pentatonic", 5);
+    scaleSelector.addItem("Blues", 6);
+    
+    // Create the attachment to link the combobox to the parameter
+    scaleSelectorAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        p.getParameterManager().getAPVTS(), "musicalScale", scaleSelector);
     
     // Set up the tabbed component
     addAndMakeVisible(tabbedComponent);
@@ -57,7 +79,7 @@ void DrumMachineAudioProcessorEditor::paint (juce::Graphics& g)
     
     // Draw title
     g.setColour(juce::Colours::white);
-    g.setFont(24.0f);
+    g.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 24.0f, juce::Font::plain));
     g.drawText("Synth of Life", getLocalBounds().removeFromTop(40), juce::Justification::centred, true);
 }
 
@@ -68,6 +90,12 @@ void DrumMachineAudioProcessorEditor::resized()
     
     // Reserve space for the title
     area.removeFromTop(40);
+    
+    // Position the scale selector at the top
+    auto scaleArea = area.removeFromTop(30);
+    auto scaleLabelWidth = 120;
+    scaleSelectorLabel.setBounds(scaleArea.removeFromLeft(scaleLabelWidth));
+    scaleSelector.setBounds(scaleArea.withWidth(200));
     
     // Position the tabbed component (leave space for waveform at bottom)
     auto tabArea = area.withHeight(area.getHeight() - 100);

@@ -5,7 +5,7 @@ GameOfLifeComponent::GameOfLifeComponent(ParameterManager& pm)
 {
     // Initialize MIDI control label
     midiControlLabel.setText("Game of Life is controlled by MIDI notes: ON = Note On, OFF = Note Off", juce::dontSendNotification);
-    midiControlLabel.setFont(juce::Font(14.0f, juce::Font::bold));
+    midiControlLabel.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::bold));
     midiControlLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(midiControlLabel);
     
@@ -16,7 +16,7 @@ GameOfLifeComponent::GameOfLifeComponent(ParameterManager& pm)
     
     // Initialize interval controls
     intervalLabel.setText("Update Interval:", juce::dontSendNotification);
-    intervalLabel.setFont(juce::Font(14.0f, juce::Font::bold));
+    intervalLabel.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::bold));
     addAndMakeVisible(intervalLabel);
     
     // Set up interval type combo box
@@ -43,17 +43,17 @@ GameOfLifeComponent::GameOfLifeComponent(ParameterManager& pm)
     
     // Initialize column mapping label
     mappingLabel.setText("Column Sample Mapping:", juce::dontSendNotification);
-    mappingLabel.setFont(juce::Font(14.0f, juce::Font::bold));
+    mappingLabel.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::bold));
     addAndMakeVisible(mappingLabel);
     
     // Initialize column control mode label
     modeLabel.setText("Column Control Mode:", juce::dontSendNotification);
-    modeLabel.setFont(juce::Font(14.0f, juce::Font::bold));
+    modeLabel.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::bold));
     addAndMakeVisible(modeLabel);
     
     // Initialize pitch range label
     pitchRangeLabel.setText("Pitch Range: -7 to +8 semitones", juce::dontSendNotification);
-    pitchRangeLabel.setFont(juce::Font(12.0f));
+    pitchRangeLabel.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 12.0f, juce::Font::plain));
     addAndMakeVisible(pitchRangeLabel);
     
     // Initialize column mapping combo boxes
@@ -296,7 +296,7 @@ void GameOfLifeComponent::drawCell(juce::Graphics& g, int x, int y, bool alive, 
     if (y == 0)
     {
         g.setColour(juce::Colours::white);
-        g.setFont(juce::Font(12.0f, juce::Font::bold));
+        g.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 12.0f, juce::Font::bold));
         g.drawText(juce::String(x + 1), cellRect.withHeight(20).translated(0, -20), juce::Justification::centred, false);
     }
 }

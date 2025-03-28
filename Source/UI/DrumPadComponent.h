@@ -42,10 +42,13 @@ private:
         std::unique_ptr<juce::Slider> panSlider;
         std::unique_ptr<juce::ToggleButton> muteButton;
         std::unique_ptr<juce::Label> filenameLabel;
+        std::unique_ptr<juce::Slider> polyphonySlider;
+        std::unique_ptr<juce::Label> polyphonyLabel;
         
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> volumeAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> panAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> muteAttachment;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> polyphonyAttachment;
     };
     
     std::array<PadControls, ParameterManager::NUM_DRUM_PADS> padControls;

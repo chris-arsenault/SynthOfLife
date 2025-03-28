@@ -31,6 +31,18 @@ enum class ColumnControlMode
     NumControlModes
 };
 
+// Musical scales
+enum class MusicalScale
+{
+    Major = 0,
+    NaturalMinor,
+    HarmonicMinor,
+    Chromatic,
+    Pentatonic,
+    Blues,
+    NumScales
+};
+
 class ParameterManager
 {
 public:
@@ -51,6 +63,7 @@ public:
     juce::AudioParameterFloat* getPanParam(int padIndex);
     juce::AudioParameterBool* getMuteParam(int padIndex);
     juce::AudioParameterInt* getMidiNoteParam(int padIndex);
+    juce::AudioParameterInt* getPolyphonyParam(int padIndex);
     
     juce::AudioParameterChoice* getIntervalTypeParam();
     juce::AudioParameterChoice* getIntervalValueParam();
@@ -61,6 +74,9 @@ public:
     // Get column mapping and mode parameters
     int getSampleForColumn(int column) const;
     ColumnControlMode getControlModeForColumn(int column) const;
+    
+    // Get the selected musical scale
+    MusicalScale getSelectedScale() const;
     
     // Get the AudioProcessorValueTreeState
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
@@ -74,6 +90,7 @@ private:
     juce::AudioParameterFloat* panParams[NUM_DRUM_PADS];
     juce::AudioParameterBool* muteParams[NUM_DRUM_PADS];
     juce::AudioParameterInt* midiNoteParams[NUM_DRUM_PADS];
+    juce::AudioParameterInt* polyphonyParams[NUM_DRUM_PADS];
     
     juce::AudioParameterChoice* intervalTypeParam;
     juce::AudioParameterChoice* intervalValueParam;
@@ -82,4 +99,5 @@ private:
     juce::AudioParameterBool* gameOfLifeRandomizeParam;
     juce::AudioParameterChoice* columnMappingParams[GRID_SIZE];
     juce::AudioParameterChoice* columnControlModeParams[GRID_SIZE];
+    juce::AudioParameterChoice* musicalScaleParam;
 };

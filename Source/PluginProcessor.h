@@ -113,14 +113,17 @@ private:
     // MIDI clock counter
     int midiClockCounter = 0;
     
-    // Host playback state
-    bool isHostPlaying = false;
-    
     // Game of Life MIDI control state
     bool gameOfLifeEnabled = false;
     
     // Note active indicator
     bool isNoteActive = false;
+    
+    // MIDI note tracking
+    int mostRecentMidiNote = 60; // Default to C3 (60)
+    
+    // Track active MIDI notes
+    std::set<int> activeNotes;
     
     // Current BPM
     double currentBPM = 120.0;

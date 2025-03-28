@@ -45,6 +45,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
             "note" + juce::String(i),
             "Pad " + juce::String(i + 1) + " MIDI Note",
             0, 127, defaultMidiNotes[i]));
+            
+        // Polyphony parameter
+        layout.add(std::make_unique<juce::AudioParameterInt>(
+            "poly" + juce::String(i),
+            "Pad " + juce::String(i + 1) + " Polyphony",
+            1, 16, 4)); // Default to 4 voices
     }
     
     // Interval parameters for Game of Life
@@ -73,6 +79,22 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
         "golRandomize",
         "Game of Life Randomize",
         false));
+        
+    // Musical scale parameter
+    juce::StringArray scaleChoices = { 
+        "Major", 
+        "Natural Minor", 
+        "Harmonic Minor", 
+        "Chromatic", 
+        "Pentatonic", 
+        "Blues" 
+    };
+    
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        "musicalScale",
+        "Musical Scale",
+        scaleChoices,
+        0)); // Default to Major scale
         
     // Column mapping parameters
     for (int col = 0; col < GRID_SIZE; ++col)
@@ -115,6 +137,7 @@ void ParameterManager::initializeParameters()
         panParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("pan" + juce::String(i)));
         muteParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("mute" + juce::String(i)));
         midiNoteParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("note" + juce::String(i)));
+        polyphonyParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("poly" + juce::String(i)));
     }
     
     intervalTypeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("intervalType"));
@@ -122,6 +145,8 @@ void ParameterManager::initializeParameters()
     
     gameOfLifeEnabledParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("golEnabled"));
     gameOfLifeRandomizeParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("golRandomize"));
+    
+    musicalScaleParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("musicalScale"));
     
     for (int col = 0; col < GRID_SIZE; ++col)
     {
@@ -158,6 +183,13 @@ juce::AudioParameterInt* ParameterManager::getMidiNoteParam(int padIndex)
     return nullptr;
 }
 
+juce::AudioParameterInt* ParameterManager::getPolyphonyParam(int padIndex)
+{
+    if (padIndex >= 0 && padIndex < NUM_DRUM_PADS)
+        return polyphonyParams[padIndex];
+    return nullptr;
+}
+
 juce::AudioParameterChoice* ParameterManager::getIntervalTypeParam()
 {
     return intervalTypeParam;
@@ -176,6 +208,16 @@ juce::AudioParameterBool* ParameterManager::getGameOfLifeEnabledParam()
 juce::AudioParameterBool* ParameterManager::getGameOfLifeRandomizeParam()
 {
     return gameOfLifeRandomizeParam;
+}
+
+MusicalScale ParameterManager::getSelectedScale() const
+{
+    if (musicalScaleParam != nullptr)
+    {
+        return static_cast<MusicalScale>(musicalScaleParam->getIndex());
+    }
+    
+    return MusicalScale::Major; // Default to Major scale
 }
 
 int ParameterManager::getSampleForColumn(int column) const

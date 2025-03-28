@@ -37,6 +37,18 @@ DrumPadComponent::DrumPadComponent(ParameterManager& pm)
         padControls[i].filenameLabel->setJustificationType(juce::Justification::centredLeft);
         addAndMakeVisible(padControls[i].filenameLabel.get());
         
+        // Create polyphony slider
+        padControls[i].polyphonySlider = std::make_unique<juce::Slider>(juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight);
+        padControls[i].polyphonySlider->setRange(1.0, 16.0, 1.0);
+        padControls[i].polyphonySlider->setValue(4.0);
+        padControls[i].polyphonySlider->setTextValueSuffix(" voices");
+        addAndMakeVisible(padControls[i].polyphonySlider.get());
+        
+        // Create polyphony label
+        padControls[i].polyphonyLabel = std::make_unique<juce::Label>("Polyphony", "Polyphony:");
+        padControls[i].polyphonyLabel->setJustificationType(juce::Justification::centredRight);
+        addAndMakeVisible(padControls[i].polyphonyLabel.get());
+        
         // Create parameter attachments
         padControls[i].volumeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
             paramManager.getAPVTS(), "volume" + juce::String(i), *padControls[i].volumeSlider);
@@ -46,6 +58,9 @@ DrumPadComponent::DrumPadComponent(ParameterManager& pm)
             
         padControls[i].muteAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             paramManager.getAPVTS(), "mute" + juce::String(i), *padControls[i].muteButton);
+            
+        padControls[i].polyphonyAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+            paramManager.getAPVTS(), "poly" + juce::String(i), *padControls[i].polyphonySlider);
     }
 }
 
@@ -71,7 +86,7 @@ void DrumPadComponent::paint(juce::Graphics& g)
         
         // Draw pad number
         g.setColour(juce::Colours::white);
-        g.setFont(juce::Font(14.0f, juce::Font::bold));
+        g.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::bold));
         g.drawText("Pad " + juce::String(i + 1), padArea.removeFromLeft(50), juce::Justification::centred);
     }
 }
@@ -99,6 +114,11 @@ void DrumPadComponent::resized()
         row2.removeFromLeft(50); // Space for alignment
         padControls[i].volumeSlider->setBounds(row2.removeFromLeft(200));
         padControls[i].panSlider->setBounds(row2.removeFromLeft(200));
+        
+        auto row3 = padArea.removeFromTop(25);
+        row3.removeFromLeft(50); // Space for alignment
+        padControls[i].polyphonyLabel->setBounds(row3.removeFromLeft(100));
+        padControls[i].polyphonySlider->setBounds(row3.removeFromLeft(200));
     }
 }
 
@@ -141,7 +161,7 @@ bool DrumPadComponent::isInterestedInFileDrag(const juce::StringArray& files)
     return false;
 }
 
-void DrumPadComponent::filesDropped(const juce::StringArray& files, int x, int y)
+void DrumPadComponent::filesDropped(const juce::StringArray& files, int /*x*/, int y)
 {
     // Calculate which pad the file was dropped on
     int padHeight = getHeight() / ParameterManager::NUM_DRUM_PADS;

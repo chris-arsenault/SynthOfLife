@@ -34,6 +34,11 @@ private:
     DrumPadComponent drumPadComponent;
     juce::AudioVisualiserComponent waveformVisualizer;
     NoteActivityIndicator noteActivityIndicator;
+    
+    // Scale selection combobox
+    juce::ComboBox scaleSelector;
+    juce::Label scaleSelectorLabel;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> scaleSelectorAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DrumMachineAudioProcessorEditor)
 };

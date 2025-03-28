@@ -47,11 +47,11 @@ void RandomTriggerComponent::paint(juce::Graphics& g)
     
     // Draw section title
     g.setColour(juce::Colours::white);
-    g.setFont(juce::Font(16.0f, juce::Font::bold));
+    g.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 16.0f, juce::Font::bold));
     g.drawText("Random Trigger", getLocalBounds().removeFromTop(30), juce::Justification::centred);
     
     // Draw labels
-    g.setFont(juce::Font(14.0f));
+    g.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::plain));
     g.drawText("Interval Type:", 10, 40, 120, 20, juce::Justification::centredLeft);
     g.drawText("Interval Value:", 10, 70, 120, 20, juce::Justification::centredLeft);
 }

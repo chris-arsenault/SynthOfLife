@@ -26,7 +26,7 @@ void NoteActivityIndicator::paint(juce::Graphics& g)
     
     // Add text
     g.setColour(juce::Colours::black);
-    g.setFont(juce::Font(12.0f, juce::Font::bold));
+    g.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 12.0f, juce::Font::bold));
     g.drawText("MIDI", indicatorBounds, juce::Justification::centred, true);
 }
 

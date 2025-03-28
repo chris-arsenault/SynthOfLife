@@ -1,19 +1,5 @@
 #include "GameOfLife.h"
 
-GameOfLife::GameOfLife() : gridHasUpdated(false)
-{
-    // Initialize all grids to empty
-    for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
-    {
-        for (int x = 0; x < ParameterManager::GRID_SIZE; ++x)
-        {
-            grid[y][x] = false;
-            nextGrid[y][x] = false;
-            previousGrid[y][x] = false;
-        }
-    }
-}
-
 GameOfLife::~GameOfLife()
 {
     // Nothing to clean up

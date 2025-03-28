@@ -1,17 +1,37 @@
 # Synth of Life
 
-A creative VST3 audio generator plugin that combines Conway's Game of Life with sample playback, created by Tsonu using the vibe-coding method.
+A creative VST3 audio generator plugin that combines Conway's Game of Life with sample playback and MIDI-controlled synthesis. The plugin creates evolving, generative audio patterns based on cellular automata rules, providing a unique and interactive sound design tool.
 
 ## Features
 
 - Interactive Game of Life grid that responds to MIDI input
 - Sample playback triggered by Game of Life cell activations
 - MIDI note-controlled simulation - Game of Life only runs when notes are active
+- Continuous sound generation while notes are held
+- Polyphonic sample playback with per-cell voice tracking
 - Column mapping system to assign different samples to grid columns
 - Velocity and pitch control modes for expressive sample playback
+- Position-based pitch shifting for melodic patterns
 - Visual note activity indicator
 - Waveform display for audio output visualization
 - Available as VST3 and Standalone application
+
+## Changelog
+
+### Version 1.1.0 (March 28, 2025)
+
+#### Major Improvements
+- **Fixed Sound Stopping Issue**: Sound now continues playing as long as a MIDI note is held
+- **Enhanced MIDI Note Tracking**: Added support for tracking multiple active MIDI notes simultaneously
+- **Improved Pitch Control**: Fixed pitch columns to properly modify pitch based on the row of the triggering cell
+- **Cell-Based Polyphony**: Added per-cell voice tracking to ensure only the intended voices are stopped when cells are deactivated
+
+#### Technical Enhancements
+- Added `activeNotes` set to track all currently held MIDI notes
+- Implemented cell-specific sample triggering and stopping
+- Enhanced Game of Life simulation to continuously update while notes are held
+- Improved debug output for easier troubleshooting
+- Optimized voice management for better performance
 
 ## Building the Project
 
@@ -46,7 +66,8 @@ A creative VST3 audio generator plugin that combines Conway's Game of Life with 
 2. Play MIDI notes to activate the Game of Life simulation
 3. Configure column mappings to assign samples to different columns of the grid
 4. Watch as the Game of Life cells trigger samples based on their activation patterns
-5. Experiment with different initial grid patterns and sample mappings
+5. Hold notes to create continuously evolving sound patterns
+6. Experiment with different initial grid patterns and sample mappings
 
 ## Project Structure
 

@@ -20,8 +20,15 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo Building with Visual Studio (Release)...
-cmake --build . --config Release --verbose
+:: Determine the number of CPU cores available
+for /f "tokens=2 delims==" %%i in ('wmic cpu get NumberOfCores /value') do set "NUM_CORES=%%i"
+set "NUM_CORES=%NUM_CORES: =%"
+echo Detected %NUM_CORES% CPU cores
+
+echo Building with Visual Studio (Release) using parallel compilation...
+:: Use detailed output to see warnings
+cmake --build . --config Release --parallel %NUM_CORES% -- /p:WarningLevel=4 /v:detailed > build_log.txt 2>&1
+echo Build log saved to build_new\build_log.txt
 
 if %ERRORLEVEL% NEQ 0 (
     echo Build failed!

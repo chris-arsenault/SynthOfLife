@@ -17,8 +17,8 @@ DrumMachineAudioProcessor::DrumMachineAudioProcessor()
     // Create parameter manager
     parameterManager = std::make_unique<ParameterManager>(*this);
     
-    // Create Game of Life
-    gameOfLife = std::make_unique<GameOfLife>();
+    // Create Game of Life with reference to parameter manager
+    gameOfLife = std::make_unique<GameOfLife>(parameterManager.get());
     
     // Initialize Game of Life with random cells
     gameOfLife->initialize(true);
@@ -28,6 +28,9 @@ DrumMachineAudioProcessor::DrumMachineAudioProcessor()
     visualizationBuffer.clear();
     
     isNoteActive = false;
+    mostRecentMidiNote = 60; // Initialize to C3 (60) instead of 0
+    
+    activeNotes = std::set<int>();
 }
 
 DrumMachineAudioProcessor::~DrumMachineAudioProcessor()
@@ -99,17 +102,32 @@ void DrumMachineAudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void DrumMachineAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Initialize drum pads
-    for (auto& pad : drumPads)
+    // Prepare all drum pads for playback
+    for (int i = 0; i < ParameterManager::NUM_DRUM_PADS; ++i)
     {
-        pad.prepareToPlay(sampleRate, samplesPerBlock);
+        drumPads[i].prepareToPlay(sampleRate, samplesPerBlock);
+        
+        // Set the polyphony for each drum pad
+        auto* polyphonyParam = parameterManager->getPolyphonyParam(i);
+        if (polyphonyParam != nullptr)
+        {
+            drumPads[i].setPolyphony(polyphonyParam->get());
+        }
+        
+        // Debug output for sample paths
+        DBG("Pad " + juce::String(i) + " sample path: " + drumPads[i].getSamplePath());
     }
+    
+    // Initialize visualization buffer
+    visualizationBuffer.setSize(1, samplesPerBlock);
+    visualizationBuffer.clear();
     
     // Reset MIDI clock counter
     midiClockCounter = 0;
     
-    // Reset host playback state
-    isHostPlaying = false;
+    // Debug output
+    DBG("prepareToPlay called with sample rate: " + juce::String(sampleRate) + 
+        ", samples per block: " + juce::String(samplesPerBlock));
 }
 
 void DrumMachineAudioProcessor::releaseResources()
@@ -151,23 +169,32 @@ void DrumMachineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
     // Clear output buffer
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
-
-    // Clear the buffer
     buffer.clear();
+    
+    // Update parameters for each drum pad
+    for (int i = 0; i < ParameterManager::NUM_DRUM_PADS; ++i)
+    {
+        auto* volumeParam = parameterManager->getVolumeParam(i);
+        auto* panParam = parameterManager->getPanParam(i);
+        auto* muteParam = parameterManager->getMuteParam(i);
+        auto* polyphonyParam = parameterManager->getPolyphonyParam(i);
+        
+        if (volumeParam != nullptr)
+            drumPads[i].setVolume(volumeParam->get());
+            
+        if (panParam != nullptr)
+            drumPads[i].setPan(panParam->get());
+            
+        if (muteParam != nullptr)
+            drumPads[i].setMuted(muteParam->get());
+            
+        if (polyphonyParam != nullptr)
+            drumPads[i].setPolyphony(polyphonyParam->get());
+    }
     
     // Check if we have MIDI messages
     bool hasMidiMessages = !midiMessages.isEmpty();
     
-    // Check if host is playing
-    if (hasMidiMessages && getPlayHead() != nullptr)
-    {
-        juce::AudioPlayHead::CurrentPositionInfo posInfo;
-        getPlayHead()->getCurrentPosition(posInfo);
-        isHostPlaying = posInfo.isPlaying;
-    }
-
     // Process MIDI messages
     juce::MidiBuffer::Iterator it(midiMessages);
     juce::MidiMessage message;
@@ -181,19 +208,36 @@ void DrumMachineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             int note = message.getNoteNumber();
             float velocity = message.getVelocity() / 127.0f;
             
+            // Store the most recent MIDI note for pitch control
+            mostRecentMidiNote = note;
+            
+            // Add note to active notes set
+            activeNotes.insert(note);
+            
             // Enable Game of Life when any note is pressed
             gameOfLifeEnabled = true;
             isNoteActive = true;
             
-            // Check each pad for matching MIDI note
-            for (int i = 0; i < ParameterManager::NUM_DRUM_PADS; ++i)
+            // Debug output
+            DBG("MIDI Note On: " + juce::String(note) + 
+                ", velocity: " + juce::String(velocity) + 
+                ", Game of Life enabled: " + juce::String(gameOfLifeEnabled ? "yes" : "no") +
+                ", Active notes: " + juce::String(activeNotes.size()));
+            
+            // Force an immediate Game of Life update to respond to the note
+            if (gameOfLifeEnabled)
             {
-                int padNote = parameterManager->getMidiNoteParam(i)->get();
-                if (note == padNote)
-                {
-                    triggerSample(i, velocity);
-                    break;
-                }
+                // Update the Game of Life grid
+                gameOfLife->update();
+                
+                // Check for active cells and trigger samples immediately after update
+                gameOfLife->checkAndTriggerSamples(
+                    drumPads, 
+                    ParameterManager::NUM_DRUM_PADS,
+                    [this](int col) { return parameterManager->getSampleForColumn(col); },
+                    [this](int col) { return parameterManager->getControlModeForColumn(col); },
+                    mostRecentMidiNote
+                );
             }
         }
         // Handle MIDI note off messages
@@ -201,45 +245,61 @@ void DrumMachineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         {
             int note = message.getNoteNumber();
             
-            // Check if this is the last note being released
-            // For simplicity, we'll just disable the Game of Life on any note off
-            // In a more complex implementation, we would track all active notes
-            gameOfLifeEnabled = false;
-            isNoteActive = false;
+            // Remove note from active notes set
+            activeNotes.erase(note);
+            
+            // Only disable Game of Life if all notes are released
+            if (activeNotes.empty())
+            {
+                gameOfLifeEnabled = false;
+                isNoteActive = false;
+                
+                DBG("All notes released, disabling Game of Life");
+            }
+            else
+            {
+                // Update most recent MIDI note to the highest active note
+                mostRecentMidiNote = *activeNotes.rbegin();
+                
+                DBG("Note off: " + juce::String(note) + 
+                    ", still have " + juce::String(activeNotes.size()) + 
+                    " active notes, new most recent: " + juce::String(mostRecentMidiNote));
+            }
         }
         // Handle MIDI clock messages
         else if (message.isMidiClock())
         {
             processMidiClock();
         }
-        // Handle MIDI start message
+        // We still process MIDI start/stop/continue messages, but don't depend on them for simulation
         else if (message.isMidiStart())
         {
-            isHostPlaying = true;
             midiClockCounter = 0;
         }
-        // Handle MIDI stop/continue messages
         else if (message.isMidiStop())
         {
-            isHostPlaying = false;
+            // No action
         }
         else if (message.isMidiContinue())
         {
-            isHostPlaying = true;
+            // No action
         }
     }
     
     // If we're in standalone mode or the host doesn't send MIDI clock,
-    // we need to manually increment the MIDI clock counter
-    if (isHostPlaying && !hasMidiMessages)
+    // we need to manually increment the MIDI clock counter based on time
     {
-        // Get the current BPM from the host if available
+        // Get the current BPM from the host if available, or use default
         double currentBPM = 120.0; // Default BPM
         if (getPlayHead() != nullptr)
         {
-            juce::AudioPlayHead::CurrentPositionInfo posInfo;
-            getPlayHead()->getCurrentPosition(posInfo);
-            currentBPM = posInfo.bpm;
+            if (auto positionInfo = getPlayHead()->getPosition())
+            {
+                if (positionInfo->getBpm().hasValue())
+                {
+                    currentBPM = *positionInfo->getBpm();
+                }
+            }
         }
         
         // Calculate samples per MIDI clock tick based on BPM
@@ -259,31 +319,52 @@ void DrumMachineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             // Increment MIDI clock counter
             midiClockCounter++;
             sampleCounter -= samplesPerMidiClock;
+            
+            // Debug output
+            if (midiClockCounter % 24 == 0) // Log every quarter note
+            {
+                DBG("MIDI Clock: " + juce::String(midiClockCounter) + 
+                    ", Game of Life enabled: " + juce::String(gameOfLifeEnabled ? "yes" : "no") + 
+                    ", Note active: " + juce::String(isNoteActive ? "yes" : "no"));
+            }
+            
+            // Process Game of Life update on MIDI clock tick if enabled
+            if (gameOfLifeEnabled && isNoteActive)
+            {
+                // Calculate the interval for Game of Life updates based on interval settings
+                int gameOfLifeInterval = calculateIntervalInTicks();
+                
+                // Update the Game of Life state based on MIDI clock and the selected interval
+                if (midiClockCounter % gameOfLifeInterval == 0)
+                {
+                    // Debug output
+                    DBG("Updating Game of Life grid at MIDI clock: " + juce::String(midiClockCounter) +
+                        ", interval: " + juce::String(gameOfLifeInterval) +
+                        ", active notes: " + juce::String(activeNotes.size()));
+                    
+                    // Update the Game of Life grid
+                    gameOfLife->update();
+                    
+                    // Check for newly activated cells and trigger samples immediately after update
+                    gameOfLife->checkAndTriggerSamples(
+                        drumPads, 
+                        ParameterManager::NUM_DRUM_PADS,
+                        [this](int col) { return parameterManager->getSampleForColumn(col); },
+                        [this](int col) { return parameterManager->getControlModeForColumn(col); },
+                        mostRecentMidiNote // Pass the most recent MIDI note for pitch control
+                    );
+                    
+                    // Check for deactivated cells and stop samples immediately
+                    gameOfLife->checkAndStopSamples(
+                        drumPads,
+                        ParameterManager::NUM_DRUM_PADS,
+                        [this](int col) { return parameterManager->getSampleForColumn(col); }
+                    );
+                }
+            }
         }
     }
     
-    // Process Game of Life if enabled and host is playing
-    if (gameOfLifeEnabled && isHostPlaying && isNoteActive)
-    {
-        // Calculate the interval for Game of Life updates based on interval settings
-        int gameOfLifeInterval = calculateIntervalInTicks();
-        
-        // Update the Game of Life state based on MIDI clock and the selected interval
-        if (midiClockCounter % gameOfLifeInterval == 0 && midiClockCounter > 0)
-        {
-            // Update the Game of Life grid
-            gameOfLife->update();
-            
-            // Check for newly activated cells and trigger samples immediately after update
-            gameOfLife->checkAndTriggerSamples(
-                drumPads, 
-                ParameterManager::NUM_DRUM_PADS,
-                [this](int col) { return parameterManager->getSampleForColumn(col); },
-                [this](int col) { return parameterManager->getControlModeForColumn(col); }
-            );
-        }
-    }
-
     // Process audio for each drum pad
     for (int i = 0; i < ParameterManager::NUM_DRUM_PADS; ++i)
     {
@@ -314,20 +395,85 @@ juce::AudioProcessorEditor* DrumMachineAudioProcessor::createEditor()
 //==============================================================================
 void DrumMachineAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
+    // Create a root XML element to store all state
+    juce::XmlElement rootXml("SynthOfLifeState");
+    
     // Store parameters
     auto state = parameterManager->getAPVTS().copyState();
-    std::unique_ptr<juce::XmlElement> xml(state.createXml());
-    copyXmlToBinary(*xml, destData);
+    std::unique_ptr<juce::XmlElement> paramsXml(state.createXml());
+    paramsXml->setTagName("Parameters");
+    rootXml.addChildElement(paramsXml.release());
+    
+    // Store sample paths
+    juce::XmlElement* samplesXml = rootXml.createNewChildElement("Samples");
+    for (int i = 0; i < ParameterManager::NUM_DRUM_PADS; ++i)
+    {
+        juce::XmlElement* padXml = samplesXml->createNewChildElement("Pad");
+        padXml->setAttribute("index", i);
+        padXml->setAttribute("path", drumPads[i].getSamplePath());
+    }
+    
+    // Write the XML to the memory block
+    copyXmlToBinary(rootXml, destData);
 }
 
 void DrumMachineAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // Restore parameters
-    std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
+    // Parse the XML from the memory block
+    std::unique_ptr<juce::XmlElement> rootXml(getXmlFromBinary(data, sizeInBytes));
     
-    if (xmlState.get() != nullptr)
-        if (xmlState->hasTagName(parameterManager->getAPVTS().state.getType()))
-            parameterManager->getAPVTS().replaceState(juce::ValueTree::fromXml(*xmlState));
+    if (rootXml != nullptr && rootXml->hasTagName("SynthOfLifeState"))
+    {
+        // Restore parameters
+        juce::XmlElement* paramsXml = rootXml->getChildByName("Parameters");
+        if (paramsXml != nullptr && paramsXml->hasTagName(parameterManager->getAPVTS().state.getType()))
+        {
+            parameterManager->getAPVTS().replaceState(juce::ValueTree::fromXml(*paramsXml));
+        }
+        
+        // Restore sample paths
+        juce::XmlElement* samplesXml = rootXml->getChildByName("Samples");
+        if (samplesXml != nullptr)
+        {
+            // Debug output
+            DBG("Found samples XML with " + juce::String(samplesXml->getNumChildElements()) + " pad elements");
+            
+            // Process each pad element
+            for (auto* padXml : samplesXml->getChildWithTagNameIterator("Pad"))
+            {
+                int index = padXml->getIntAttribute("index", -1);
+                juce::String path = padXml->getStringAttribute("path", "");
+                
+                // Debug output
+                DBG("Loading sample for pad " + juce::String(index) + " from path: " + path);
+                
+                // Load the sample if the path is valid
+                if (index >= 0 && index < ParameterManager::NUM_DRUM_PADS && path.isNotEmpty())
+                {
+                    juce::File sampleFile(path);
+                    if (sampleFile.existsAsFile())
+                    {
+                        DBG("File exists, loading sample...");
+                        drumPads[index].loadSample(sampleFile);
+                        // Store the path for future reference
+                        drumPads[index].setSamplePath(path);
+                    }
+                    else
+                    {
+                        DBG("File does not exist: " + path);
+                    }
+                }
+            }
+        }
+        else
+        {
+            DBG("No samples XML found in state");
+        }
+    }
+    else
+    {
+        DBG("Invalid or missing root XML element in state");
+    }
 }
 
 //==============================================================================
