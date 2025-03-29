@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <memory>
 
 /**
  * Represents a single voice for sample playback with ADSR envelope
@@ -34,8 +35,14 @@ public:
     float getPlaybackRate() const { return playbackRate; }
     void setPlaybackRate(float rate) { playbackRate = rate; }
     
-    // Sample buffer reference
-    void setSampleBuffer(const juce::AudioBuffer<float>* buffer) { sampleBuffer = buffer; }
+    // Sample buffer handling
+    void setSampleBuffer(const juce::AudioBuffer<float>* buffer) 
+    { 
+        // Store a reference to the sample buffer
+        // We don't need to make a copy since the buffer is owned by the DrumPad
+        // and all voices share the same buffer but have independent playback positions
+        sampleBuffer = buffer;
+    }
     const juce::AudioBuffer<float>* getSampleBuffer() const { return sampleBuffer; }
     
     // Cell coordinates (for Game of Life grid)
@@ -54,8 +61,16 @@ public:
     bool isReleasingState() const { return isReleasing; }
     void setReleasing(bool releasing) { isReleasing = releasing; }
     
-    // Reset envelope to initial attack state
-    void resetEnvelope() { envelopeState = EnvelopeState::Attack; envelopeLevel = 0.0f; isReleasing = false; }
+    // Reset envelope to initial attack state and optionally reset playback position
+    void resetEnvelope(bool resetPlaybackPos = true) 
+    { 
+        envelopeState = EnvelopeState::Attack; 
+        envelopeLevel = 0.0f; 
+        isReleasing = false;
+        if (resetPlaybackPos) {
+            playbackPosition = 0; // Reset playback position to start of sample
+        }
+    }
     
     // Per-voice ADSR rates
     float getAttackRate() const { return voiceAttackRate; }
@@ -94,7 +109,7 @@ private:
     int cellX = -1;
     int cellY = -1;
     
-    // Sample buffer reference
+    // Sample buffer handling
     const juce::AudioBuffer<float>* sampleBuffer = nullptr;
     
     // ADSR envelope state

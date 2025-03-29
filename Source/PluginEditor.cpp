@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "DebugLogger.h"
 
 //==============================================================================
 DrumMachineAudioProcessorEditor::DrumMachineAudioProcessorEditor (DrumMachineAudioProcessor& p)
@@ -448,6 +449,9 @@ void DrumMachineAudioProcessorEditor::updateSectionIteration()
     // If the section has changed, update the grid
     if (newSection != currentSection)
     {
+        DebugLogger::log("Section transition: Section " + std::to_string(currentSection + 1) + 
+                         " -> Section " + std::to_string(newSection + 1));
+        
         // Deactivate old section
         sections[currentSection].isActive = false;
         
@@ -490,6 +494,8 @@ void DrumMachineAudioProcessorEditor::updateSectionUI()
 
 void DrumMachineAudioProcessorEditor::initializeGridForSection(int sectionIndex)
 {
+    DebugLogger::log("Initializing grid for Section " + std::to_string(sectionIndex + 1));
+    
     // Get the Game of Life instance
     auto* gameOfLife = gameOfLifeComponent.getGameOfLife();
     if (gameOfLife == nullptr)
@@ -509,6 +515,9 @@ void DrumMachineAudioProcessorEditor::initializeGridForSection(int sectionIndex)
         // Get the density value (between 0.1 and 0.9)
         float density = densityParam->get();
         
+        DebugLogger::log("Section " + std::to_string(sectionIndex + 1) + 
+                         " - Randomizing grid with density: " + std::to_string(density));
+        
         // Randomize the grid with the specified density
         gameOfLife->initializeWithDensity(density);
         
@@ -527,6 +536,9 @@ void DrumMachineAudioProcessorEditor::initializeGridForSection(int sectionIndex)
         // Use the specified grid state from the parameter
         int gridState = gridStateParam->get();
         juce::String gridStateStr = juce::String(gridState);
+        
+        DebugLogger::log("Section " + std::to_string(sectionIndex + 1) + 
+                         " - Using specific grid state: " + gridStateStr.toStdString());
         
         // Set the grid state
         gameOfLifeComponent.setGridStateFromString(gridStateStr);

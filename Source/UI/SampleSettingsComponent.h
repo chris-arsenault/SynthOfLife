@@ -57,7 +57,8 @@ private:
         juce::Slider midiNoteSlider;
         juce::Slider polyphonySlider;
         juce::ToggleButton velocityModeButton;
-        juce::ToggleButton pitchModeButton;
+        juce::ToggleButton midiPitchButton;    // New checkbox for MIDI pitch control
+        juce::ToggleButton rowPitchButton;     // New checkbox for row-based pitch control
         juce::ToggleButton timingModeButton;
         juce::TextButton loadButton;
         juce::Label filenameLabel;
@@ -71,7 +72,8 @@ private:
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> midiNoteAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> polyphonyAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> velocityModeAttachment;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> pitchModeAttachment;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> midiPitchAttachment;    // New attachment for MIDI pitch control
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> rowPitchAttachment;     // New attachment for row-based pitch control
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> timingModeAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> legatoAttachment;
         

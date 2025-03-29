@@ -1,4 +1,5 @@
 #include "DrumPad.h"
+#include "DebugLogger.h"
 
 DrumPad::DrumPad()
 {
@@ -17,6 +18,9 @@ DrumPad::DrumPad()
     // Initialize last played note and velocity
     lastPlayedNote = 0;
     lastPlayedVelocity = 0.0f;
+    
+    // Initialize refresh counter
+    refreshCounter = 0;
 }
 
 DrumPad::~DrumPad()
@@ -69,220 +73,120 @@ void DrumPad::loadSample(const juce::File& file)
     }
 }
 
-void DrumPad::triggerSample(float velocity)
+void DrumPad::triggerSampleUnified(float velocity, int pitchShiftSemitones, int cellX, int cellY, float delayMs)
 {
+    // Note: The delayMs parameter is handled at the processor level through the scheduleSampleWithDelay method.
+    // This function is designed to be called directly for immediate playback or indirectly through the scheduler.
+    
     if (sampleBuffer.getNumSamples() == 0 || muted)
         return;
     
-    // Track the last played note and velocity
-    lastPlayedNote = midiNote;
-    lastPlayedVelocity = velocity;
+    // Determine the actual pitch shift to apply based on the pitch control settings
+    int actualPitchShift = 0;
     
-    // Check if we're in legato mode and there are already active voices
-    if (legatoMode && !activeVoices.empty())
+    // Apply MIDI pitch if enabled (base note from midiNote)
+    if (midiPitchEnabled)
     {
-        // In legato mode, we update the existing voices instead of creating new ones
-        for (auto& voice : activeVoices)
-        {
-            // Update the velocity (volume) of the voice
-            voice.setVolume(velocity);
-            
-            // If the voice is in release phase, reset it to attack phase
-            if (voice.isReleasingState())
-            {
-                voice.resetEnvelope();
-                voice.setReleasing(false);
-                
-                // Set the envelope parameters
-                voice.setEnvelopeRates(
-                    envelopeProcessor.getAttackRate(),
-                    envelopeProcessor.getDecayRate(),
-                    envelopeProcessor.getSustainLevel(),
-                    envelopeProcessor.getReleaseRate()
-                );
-                
-                // Debug output
-                DBG("Legato mode - Resetting voice envelope with ADSR rates: " +
-                    juce::String(envelopeProcessor.getAttackRate()) + ", " +
-                    juce::String(envelopeProcessor.getDecayRate()) + ", " +
-                    juce::String(envelopeProcessor.getSustainLevel()) + ", " +
-                    juce::String(envelopeProcessor.getReleaseRate()));
-            }
-        }
+        // For both MIDI-triggered and grid-triggered notes, apply the pitch shift
+        actualPitchShift = pitchShiftSemitones;
+        
+        // Add additional debug logging
+        DebugLogger::log("DrumPad::triggerSampleUnified - MIDI Pitch Enabled with shift: " + 
+                        std::to_string(pitchShiftSemitones) + 
+                        ", midiNote: " + std::to_string(midiNote));
     }
-    else
+    
+    // Apply row-based pitch if enabled (from the pitchShiftSemitones parameter)
+    if (rowPitchEnabled && cellX >= 0 && cellY >= 0)
     {
-        // Create a new voice
-        Voice newVoice;
-        newVoice.setPlaybackPosition(0);
-        newVoice.setPlaybackRate(1.0f);
-        newVoice.setVolume(velocity);
+        actualPitchShift = pitchShiftSemitones;
         
-        // Set the sample buffer for the voice
-        newVoice.setSampleBuffer(&sampleBuffer);
-        
-        // Set the sample rate for the voice
-        newVoice.setSampleRate(currentSampleRate);
-        
-        // Get the current ADSR rates from the envelope processor
-        float attackRate = envelopeProcessor.getAttackRate();
-        float decayRate = envelopeProcessor.getDecayRate();
-        float sustainLevel = envelopeProcessor.getSustainLevel();
-        float releaseRate = envelopeProcessor.getReleaseRate();
-        
-        // Debug output
-        DBG("New voice - Setting ADSR rates: " +
-            juce::String(attackRate) + ", " +
-            juce::String(decayRate) + ", " +
-            juce::String(sustainLevel) + ", " +
-            juce::String(releaseRate) +
-            " (from ADSR times: " +
-            juce::String(envelopeProcessor.getAttackTime()) + "ms, " +
-            juce::String(envelopeProcessor.getDecayTime()) + "ms, " +
-            juce::String(envelopeProcessor.getSustainLevel()) + ", " +
-            juce::String(envelopeProcessor.getReleaseTime()) + "ms)");
-        
-        // Set envelope parameters using setEnvelopeRates
-        newVoice.setEnvelopeRates(
-            attackRate,
-            decayRate,
-            sustainLevel,
-            releaseRate
-        );
-        
-        // Reset the envelope to ensure it starts from the beginning
-        newVoice.resetEnvelope();
-        
-        // Add the voice to the active voices list, limiting polyphony
-        if (activeVoices.size() >= maxPolyphony)
-        {
-            // Remove the oldest voice
-            activeVoices.erase(activeVoices.begin());
-        }
-        
-        activeVoices.push_back(newVoice);
+        // Add additional debug logging
+        DebugLogger::log("DrumPad::triggerSampleUnified - Row Pitch Enabled with shift: " + 
+                        std::to_string(pitchShiftSemitones));
     }
-}
-
-void DrumPad::triggerSampleWithPitch(float velocity, int pitchShiftSemitones)
-{
-    if (sampleBuffer.getNumSamples() == 0 || muted)
-        return;
     
     // Calculate the playback rate for the pitch shift
-    float pitchRatio = std::pow(2.0f, pitchShiftSemitones / 12.0f);
+    float pitchRatio = std::pow(2.0f, actualPitchShift / 12.0f);
     
     // Track the last played note and velocity
-    lastPlayedNote = midiNote + pitchShiftSemitones;
+    lastPlayedNote = midiNote + actualPitchShift;
     lastPlayedVelocity = velocity;
     
-    // Check if we're in legato mode and there are already active voices
-    if (legatoMode && !activeVoices.empty())
-    {
-        // In legato mode, we update the existing voices instead of creating new ones
-        for (auto& voice : activeVoices)
-        {
-            // Update the velocity (volume) and playback rate of the voice
-            voice.setVolume(velocity);
-            voice.setPlaybackRate(pitchRatio);
-            
-            // If the voice is in release phase, reset it to attack phase
-            if (voice.isReleasingState())
-            {
-                voice.resetEnvelope();
-                voice.setReleasing(false);
-                
-                // Set the envelope parameters
-                voice.setEnvelopeRates(
-                    envelopeProcessor.getAttackRate(),
-                    envelopeProcessor.getDecayRate(),
-                    envelopeProcessor.getSustainLevel(),
-                    envelopeProcessor.getReleaseRate()
-                );
-            }
-        }
-    }
-    else
-    {
-        // Create a new voice
-        Voice newVoice;
-        newVoice.setPlaybackPosition(0);
-        newVoice.setPlaybackRate(pitchRatio);
-        newVoice.setVolume(velocity);
-        
-        // Set the sample buffer for the voice
-        newVoice.setSampleBuffer(&sampleBuffer);
-        
-        // Set the sample rate for the voice
-        newVoice.setSampleRate(currentSampleRate);
-        
-        // Set envelope parameters
-        newVoice.setEnvelopeRates(
-            envelopeProcessor.getAttackRate(),
-            envelopeProcessor.getDecayRate(),
-            envelopeProcessor.getSustainLevel(),
-            envelopeProcessor.getReleaseRate()
-        );
-        
-        // Reset the envelope to ensure it starts from the beginning
-        newVoice.resetEnvelope();
-        
-        // Add the voice to the active voices list, limiting polyphony
-        if (activeVoices.size() >= maxPolyphony)
-        {
-            // Remove the oldest voice
-            activeVoices.erase(activeVoices.begin());
-        }
-        
-        activeVoices.push_back(newVoice);
-    }
-}
-
-void DrumPad::triggerSampleForCell(float velocity, int cellX, int cellY)
-{
-    if (sampleBuffer.getNumSamples() == 0 || muted)
-        return;
+    DebugLogger::log("DrumPad::triggerSampleUnified - MIDI Note: " + std::to_string(lastPlayedNote) + 
+                    ", Velocity: " + std::to_string(velocity) + 
+                    ", Pitch Shift: " + std::to_string(actualPitchShift) + 
+                    ", Original Pitch Shift: " + std::to_string(pitchShiftSemitones) +
+                    ", MIDI Pitch Enabled: " + std::to_string(midiPitchEnabled) +
+                    ", Row Pitch Enabled: " + std::to_string(rowPitchEnabled) +
+                    ", Cell: (" + std::to_string(cellX) + "," + std::to_string(cellY) + ")" +
+                    ", Sustain Level: " + std::to_string(envelopeProcessor.getSustainLevel()));
     
-    // Track the last played note and velocity
-    lastPlayedNote = midiNote;
-    lastPlayedVelocity = velocity;
+    // Check if this is a cell-specific trigger
+    bool isCellSpecific = (cellX >= 0 && cellY >= 0);
     
-    // Check if we're in legato mode and there's already a voice for this cell
+    // Check if we're in legato mode and should update existing voices
     if (legatoMode)
     {
-        // Find an existing voice for this cell
-        for (auto& voice : activeVoices)
+        // For cell-specific triggers, find the voice for that cell
+        if (isCellSpecific)
         {
-            if (voice.isForCell(cellX, cellY))
+            for (auto& voice : activeVoices)
             {
-                // Update the velocity (volume) of the voice
+                if (voice.isForCell(cellX, cellY))
+                {
+                    // Update the velocity and playback rate of the voice
+                    voice.setVolume(velocity);
+                    voice.setPlaybackRate(pitchRatio);
+                    
+                    // If the voice is in release phase, reset it to attack phase
+                    // But in legato mode, we want to preserve both envelope and playback position
+                    if (voice.isReleasingState())
+                    {
+                        // Only update the releasing flag but don't reset the envelope
+                        voice.setReleasing(false);
+                        
+                        // Set the envelope parameters
+                        voice.setEnvelopeRates(
+                            envelopeProcessor.getAttackRate(),
+                            envelopeProcessor.getDecayRate(),
+                            envelopeProcessor.getSustainLevel(),
+                            envelopeProcessor.getReleaseRate()
+                        );
+                    }
+                    
+                    // Found and updated an existing voice, so we're done
+                    return;
+                }
+            }
+        }
+        // For non-cell-specific triggers, update all active voices
+        else if (!activeVoices.empty())
+        {
+            for (auto& voice : activeVoices)
+            {
+                // Update the velocity and playback rate of the voice
                 voice.setVolume(velocity);
+                voice.setPlaybackRate(pitchRatio);
                 
-                // If the voice is in release phase, reset it to attack phase
+                // If the voice is in release phase, do not reset it to attack phase
+                // In legato mode, we want to preserve both envelope and playback position
                 if (voice.isReleasingState())
                 {
-                    voice.resetEnvelope();
+                    // Only update the releasing flag
                     voice.setReleasing(false);
-                    
-                    // Set the envelope parameters
-                    voice.setEnvelopeRates(
-                        envelopeProcessor.getAttackRate(),
-                        envelopeProcessor.getDecayRate(),
-                        envelopeProcessor.getSustainLevel(),
-                        envelopeProcessor.getReleaseRate()
-                    );
                 }
-                
-                // Found and updated an existing voice, so we're done
-                return;
             }
+            
+            // We've updated all existing voices, so we're done
+            return;
         }
     }
     
     // Create a new voice
     Voice newVoice;
     newVoice.setPlaybackPosition(0);
-    newVoice.setPlaybackRate(1.0f);
+    newVoice.setPlaybackRate(pitchRatio);
     newVoice.setVolume(velocity);
     
     // Set the sample buffer for the voice
@@ -291,8 +195,11 @@ void DrumPad::triggerSampleForCell(float velocity, int cellX, int cellY)
     // Set the sample rate for the voice
     newVoice.setSampleRate(currentSampleRate);
     
-    // Set the cell coordinates
-    newVoice.setCell(cellX, cellY);
+    // Set the cell coordinates if this is a cell-specific trigger
+    if (isCellSpecific)
+    {
+        newVoice.setCell(cellX, cellY);
+    }
     
     // Get the current ADSR rates from the envelope processor
     float attackRate = envelopeProcessor.getAttackRate();
@@ -322,104 +229,24 @@ void DrumPad::triggerSampleForCell(float velocity, int cellX, int cellY)
     activeVoices.push_back(newVoice);
 }
 
-void DrumPad::triggerSampleWithPitchForCell(float velocity, int pitchShiftSemitones, int cellX, int cellY)
+void DrumPad::triggerSample(float velocity)
 {
-    if (sampleBuffer.getNumSamples() == 0 || muted)
-        return;
-    
-    // Calculate the playback rate for the pitch shift
-    float pitchRatio = std::pow(2.0f, pitchShiftSemitones / 12.0f);
-    
-    // Track the last played note and velocity
-    lastPlayedNote = midiNote + pitchShiftSemitones;
-    lastPlayedVelocity = velocity;
-    
-    // Check if we're in legato mode and there's already a voice for this cell
-    if (legatoMode)
-    {
-        // Find an existing voice for this cell
-        for (auto& voice : activeVoices)
-        {
-            if (voice.isForCell(cellX, cellY))
-            {
-                // Update the velocity (volume) and playback rate of the voice
-                voice.setVolume(velocity);
-                voice.setPlaybackRate(pitchRatio);
-                
-                // If the voice is in release phase, reset it to attack phase
-                if (voice.isReleasingState())
-                {
-                    voice.resetEnvelope();
-                    voice.setReleasing(false);
-                    
-                    // Set the envelope parameters
-                    voice.setEnvelopeRates(
-                        envelopeProcessor.getAttackRate(),
-                        envelopeProcessor.getDecayRate(),
-                        envelopeProcessor.getSustainLevel(),
-                        envelopeProcessor.getReleaseRate()
-                    );
-                }
-                
-                // Found and updated an existing voice, so we're done
-                return;
-            }
-        }
-    }
-    
-    // Create a new voice
-    Voice newVoice;
-    newVoice.setPlaybackPosition(0);
-    newVoice.setPlaybackRate(pitchRatio);
-    newVoice.setVolume(velocity);
-    
-    // Set the sample buffer for the voice
-    newVoice.setSampleBuffer(&sampleBuffer);
-    
-    // Set the sample rate for the voice
-    newVoice.setSampleRate(currentSampleRate);
-    
-    // Set the cell coordinates
-    newVoice.setCell(cellX, cellY);
-    
-    // Set envelope parameters
-    newVoice.setEnvelopeRates(
-        envelopeProcessor.getAttackRate(),
-        envelopeProcessor.getDecayRate(),
-        envelopeProcessor.getSustainLevel(),
-        envelopeProcessor.getReleaseRate()
-    );
-    
-    // Reset the envelope to ensure it starts from the beginning
-    newVoice.resetEnvelope();
-    
-    // Check if we need to remove an old voice due to polyphony limit
-    if (activeVoices.size() >= maxPolyphony)
-    {
-        // Remove the oldest voice
-        activeVoices.erase(activeVoices.begin());
-    }
-    
-    // Add the new voice to the active voices list
-    activeVoices.push_back(newVoice);
+    triggerSampleUnified(velocity, 0, -1, -1);
 }
 
-juce::String DrumPad::getLastPlayedNoteAsString() const
+void DrumPad::triggerSampleWithPitch(float velocity, int pitchShiftSemitones)
 {
-    if (lastPlayedNote <= 0)
-        return "-";
-        
-    // Convert MIDI note number to note name and octave
-    static const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    
-    // MIDI note 60 is C3 (standard MIDI octave numbering)
-    // Formula: octave = (note / 12) - 1
-    // For C3 at 60: (60 / 12) - 1 = 5 - 1 = 4, which is wrong
-    // Correct formula: octave = (note / 12) - 5
-    int octave = (lastPlayedNote / 12) - 5;
-    int noteIndex = lastPlayedNote % 12;
-    
-    return juce::String(noteNames[noteIndex]) + juce::String(octave);
+    triggerSampleUnified(velocity, pitchShiftSemitones, -1, -1);
+}
+
+void DrumPad::triggerSampleForCell(float velocity, int cellX, int cellY)
+{
+    triggerSampleUnified(velocity, 0, cellX, cellY);
+}
+
+void DrumPad::triggerSampleWithPitchForCell(float velocity, int pitchShiftSemitones, int cellX, int cellY)
+{
+    triggerSampleUnified(velocity, pitchShiftSemitones, cellX, cellY);
 }
 
 void DrumPad::updatePitchForCell(int pitchShiftSemitones, int cellX, int cellY)
@@ -451,6 +278,37 @@ void DrumPad::updatePitchForCell(int pitchShiftSemitones, int cellX, int cellY)
     {
         DBG("Cannot update pitch - no sample loaded");
     }
+}
+
+void DrumPad::updateVoiceParametersForCell(float velocity, int pitchShiftSemitones, int cellX, int cellY)
+{
+    // Calculate the playback rate for the pitch shift
+    float pitchRatio = std::pow(2.0f, pitchShiftSemitones / 12.0f);
+    
+    // Find the voice for this cell and update its parameters
+    for (auto& voice : activeVoices)
+    {
+        if (voice.isForCell(cellX, cellY))
+        {
+            // Gently update parameters without resetting envelope or playback position
+            voice.setVolume(velocity);
+            voice.setPlaybackRate(pitchRatio);
+            
+            // Log the update
+            DebugLogger::log("DrumPad::updateVoiceParametersForCell - Updated voice for cell (" + 
+                            std::to_string(cellX) + "," + std::to_string(cellY) + ") - " +
+                            "Velocity: " + std::to_string(velocity) + ", " +
+                            "Pitch Shift: " + std::to_string(pitchShiftSemitones));
+            
+            // Found and updated the voice, so we're done
+            return;
+        }
+    }
+    
+    // If we get here, there was no existing voice for this cell
+    // This shouldn't happen in normal operation, but log it just in case
+    DebugLogger::log("DrumPad::updateVoiceParametersForCell - No voice found for cell (" + 
+                    std::to_string(cellX) + "," + std::to_string(cellY) + ")");
 }
 
 void DrumPad::stopSample()
@@ -514,18 +372,44 @@ void DrumPad::renderNextBlock(juce::AudioBuffer<float>& buffer, int startSample,
         return;
         
     // Process each active voice
+    int activeVoiceCount = 0;
     for (auto it = activeVoices.begin(); it != activeVoices.end();)
     {
         if (it->isActive())
         {
             it->processBlock(buffer, startSample, numSamples, volume, pan);
             ++it;
+            ++activeVoiceCount;
         }
         else
         {
             // Remove inactive voices
             it = activeVoices.erase(it);
         }
+    }
+    
+    // Periodically refresh sustained voices to prevent volume decay
+    if (++refreshCounter >= 1000) // Every ~1000 audio blocks
+    {
+        refreshCounter = 0;
+        
+        // Refresh any voices in sustain state
+        for (auto& voice : activeVoices)
+        {
+            if (voice.getEnvelopeState() == Voice::EnvelopeState::Sustain)
+            {
+                // Ensure the envelope level is at the correct sustain level
+                voice.setEnvelopeLevel(voice.getSustainLevel());
+                
+                DebugLogger::log("DrumPad: Refreshed sustained voice - Sustain Level: " + 
+                                std::to_string(voice.getSustainLevel()));
+            }
+        }
+    }
+    
+    if (activeVoiceCount > 0 && activeVoiceCount % 10 == 0) {
+        DebugLogger::log("DrumPad::renderNextBlock - Processing " + std::to_string(activeVoiceCount) + 
+                        " active voices with volume: " + std::to_string(volume));
     }
 }
 
@@ -638,4 +522,34 @@ float DrumPad::getSustain() const
 float DrumPad::getRelease() const
 {
     return envelopeProcessor.getReleaseTime();
+}
+
+juce::String DrumPad::getLastPlayedNoteAsString() const
+{
+    // If no note has been played yet, return a dash
+    if (lastPlayedNote <= 0)
+        return "-";
+    
+    // Convert MIDI note number to note name and octave
+    static const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    
+    // Determine which note to display
+    int displayNote;
+    
+    // If neither MIDI pitch nor row pitch is enabled, display middle C (MIDI note 60)
+    if (!midiPitchEnabled && !rowPitchEnabled)
+    {
+        displayNote = 60; // Middle C
+    }
+    else
+    {
+        // If pitch control is enabled, use the actual last played note
+        displayNote = lastPlayedNote;
+    }
+    
+    // MIDI note 60 is middle C (C4 in scientific pitch notation)
+    int octave = (displayNote / 12) - 1;
+    int noteIndex = displayNote % 12;
+    
+    return juce::String(noteNames[noteIndex]) + juce::String(octave);
 }

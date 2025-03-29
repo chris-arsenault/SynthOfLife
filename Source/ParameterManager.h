@@ -28,10 +28,8 @@ enum class ColumnControlMode
 {
     None = 0,
     Velocity = 1,
-    Pitch = 2,
-    Timing = 4,
-    Both = Velocity | Pitch,
-    All = Velocity | Pitch | Timing
+    Timing = 2,
+    Both = Velocity | Timing
 };
 
 // Musical scales
@@ -68,7 +66,8 @@ public:
     juce::AudioParameterInt* getMidiNoteParam(int sampleIndex);
     juce::AudioParameterInt* getPolyphonyParam(int sampleIndex);
     juce::AudioParameterBool* getVelocityModeParam(int sampleIndex);
-    juce::AudioParameterBool* getPitchModeParam(int sampleIndex);
+    juce::AudioParameterBool* getMidiPitchParam(int sampleIndex);  // New getter for MIDI pitch control
+    juce::AudioParameterBool* getRowPitchParam(int sampleIndex);   // New getter for row-based pitch control
     juce::AudioParameterBool* getTimingModeParam(int sampleIndex);
     juce::AudioParameterBool* getLegatoParam(int sampleIndex);
     juce::AudioParameterFloat* getAttackParam(int sampleIndex);
@@ -158,7 +157,8 @@ private:
     std::vector<juce::AudioParameterInt*> midiNoteParams;
     std::vector<juce::AudioParameterInt*> polyphonyParams;
     std::vector<juce::AudioParameterBool*> velocityModeParams;
-    std::vector<juce::AudioParameterBool*> pitchModeParams;
+    std::vector<juce::AudioParameterBool*> midiPitchParams;  // MIDI note pitch control
+    std::vector<juce::AudioParameterBool*> rowPitchParams;   // Row-based pitch control
     std::vector<juce::AudioParameterBool*> timingModeParams;
     std::vector<juce::AudioParameterBool*> legatoParams;
     std::vector<juce::AudioParameterFloat*> attackParams;

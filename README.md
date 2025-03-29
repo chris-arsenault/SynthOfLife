@@ -21,6 +21,20 @@ A creative VST3 audio generator plugin that combines Conway's Game of Life with 
 
 ## Changelog
 
+### Version 1.5.1 (March 29, 2025)
+
+#### Legato Mode Improvements
+- **Enhanced Legato Behavior**: Fixed issues with legato mode to ensure smooth, continuous playback
+- **Preserved Envelope State**: Legato mode now properly maintains the envelope state for sustained notes
+- **Consistent Playback Position**: Improved handling of playback position in legato mode
+- **Eliminated Pulsing Artifacts**: Resolved issues that caused pulsing sounds when cells remained active
+
+#### Technical Improvements
+- Refactored voice handling to better respect legato mode behavior
+- Modified envelope reset logic to be more context-aware
+- Improved handling of sustained notes in the Game of Life grid
+- Enhanced debug logging for easier troubleshooting
+
 ### Version 1.5.0 (March 29, 2025)
 
 #### Timing Control Enhancements

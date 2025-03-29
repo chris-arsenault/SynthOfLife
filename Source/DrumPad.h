@@ -31,8 +31,14 @@ public:
     // Trigger sample with pitch shift for a specific cell in the Game of Life grid
     void triggerSampleWithPitchForCell(float velocity, int pitchShiftSemitones, int cellX, int cellY);
     
+    // Unified sample triggering function that handles all cases
+    void triggerSampleUnified(float velocity, int pitchShiftSemitones = 0, int cellX = -1, int cellY = -1, float delayMs = 0.0f);
+    
     // Update pitch for a specific cell in the Game of Life grid without retriggering
     void updatePitchForCell(int pitchShiftSemitones, int cellX, int cellY);
+    
+    // Update voice parameters for a specific cell without retriggering or resetting
+    void updateVoiceParametersForCell(float velocity, int pitchShiftSemitones, int cellX, int cellY);
     
     // Stop all sample playback immediately
     void stopSample();
@@ -72,7 +78,7 @@ public:
     float getRelease() const;
     
     // Legato mode setters and getters
-    void setLegatoMode(bool legato) { legatoMode = legato; }
+    void setLegatoMode(bool enabled) { legatoMode = enabled; }
     bool isLegatoMode() const { return legatoMode; }
     
     // Get the file path
@@ -86,6 +92,14 @@ public:
     int getLastPlayedNote() const { return lastPlayedNote; }
     float getLastPlayedVelocity() const { return lastPlayedVelocity; }
     juce::String getLastPlayedNoteAsString() const;
+    
+    // Set whether MIDI pitch control is enabled
+    void setMidiPitchEnabled(bool enabled) { midiPitchEnabled = enabled; }
+    bool isMidiPitchEnabled() const { return midiPitchEnabled; }
+    
+    // Set whether row-based pitch control is enabled
+    void setRowPitchEnabled(bool enabled) { rowPitchEnabled = enabled; }
+    bool isRowPitchEnabled() const { return rowPitchEnabled; }
     
     // Get the current volume level for visualization (considers ADSR envelope)
     float getCurrentVolumeLevel() const;
@@ -103,6 +117,8 @@ private:
     int midiNote = 0;
     double currentSampleRate = 44100.0; // Store the current sample rate
     bool legatoMode = true; // Default to legato mode (current behavior)
+    bool midiPitchEnabled = false; // Default to MIDI pitch control disabled
+    bool rowPitchEnabled = false; // Default to row-based pitch control disabled
     
     // Track most recently played note information
     int lastPlayedNote = 0;
@@ -110,4 +126,7 @@ private:
     
     // ADSR envelope processor
     EnvelopeProcessor envelopeProcessor;
+    
+    // Counter for refreshing sustained voices
+    int refreshCounter = 0;
 };

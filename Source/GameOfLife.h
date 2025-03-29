@@ -6,6 +6,7 @@
 #include "DrumPad.h"
 #include "ScaleUtility.h"
 #include "Grid.h"
+#include "DebugLogger.h"
 
 /**
  * Implements Conway's Game of Life cellular automaton with audio triggering
@@ -37,7 +38,12 @@ public:
     // Update the grid to the next generation
     void update()
     {
+        DebugLogger::log("GameOfLife::update - Updating grid to next generation");
         grid.update();
+        
+        // Log the number of active cells after update
+        int activeCells = countActiveCells();
+        DebugLogger::log("GameOfLife::update - Active cells after update: " + std::to_string(activeCells));
     }
     
     // Get the state of a cell
@@ -104,6 +110,20 @@ public:
 private:
     ParameterManager* parameterManager;
     GameOfLifeApp::Grid grid;
+    
+    int countActiveCells() const
+    {
+        int activeCells = 0;
+        for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
+        {
+            for (int x = 0; x < ParameterManager::GRID_SIZE; ++x)
+            {
+                if (grid.getCellState(x, y))
+                    activeCells++;
+            }
+        }
+        return activeCells;
+    }
 };
 
 // Template method implementations
@@ -140,7 +160,7 @@ void GameOfLife::checkAndTriggerSamples(std::array<DrumPad, ParameterManager::NU
                 float velocity = (float)(y + 1) / (float)ParameterManager::GRID_SIZE;
                 
                 // Trigger the sample based on control mode
-                if (controlMode == ColumnControlMode::Pitch)
+                if (controlMode == ColumnControlMode::Both)
                 {
                     // Calculate MIDI note based on y position (higher = higher pitch)
                     int midiNote = midiNoteOffset + y;
@@ -191,7 +211,7 @@ void GameOfLife::updatePitchOnly(std::array<DrumPad, ParameterManager::NUM_SAMPL
                 auto controlMode = getControlModeForColumn(x);
                 
                 // Only update pitch for pitch mode columns
-                if (controlMode == ColumnControlMode::Pitch)
+                if (controlMode == ColumnControlMode::Both)
                 {
                     // Calculate MIDI note based on y position (higher = higher pitch)
                     int midiNote = midiNoteOffset + y;

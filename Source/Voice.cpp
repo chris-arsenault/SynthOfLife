@@ -1,4 +1,5 @@
 #include "Voice.h"
+#include "DebugLogger.h"
 
 Voice::Voice()
 {
@@ -64,6 +65,7 @@ void Voice::updateEnvelope(int numSamples)
                 {
                     envelopeLevel = 1.0f;
                     envelopeState = EnvelopeState::Decay;
+                    DebugLogger::log("Voice: Transitioned from Attack to Decay state");
                 }
             }
             else
@@ -71,37 +73,61 @@ void Voice::updateEnvelope(int numSamples)
                 // If attack rate is 0, jump straight to full level and decay phase
                 envelopeLevel = 1.0f;
                 envelopeState = EnvelopeState::Decay;
+                DebugLogger::log("Voice: Jumped from Attack to Decay state (zero attack rate)");
             }
             break;
             
         case EnvelopeState::Decay:
             // Decrement envelope level during decay phase
             // Apply the rate for each sample in the block
-            envelopeLevel -= voiceDecayRate * numSamples;
-            
-            // Check if we've reached the sustain level
-            if (envelopeLevel <= voiceSustainLevel)
+            if (voiceDecayRate > 0.0f)
             {
+                envelopeLevel -= voiceDecayRate * numSamples;
+                
+                // Check if we've reached the sustain level
+                if (envelopeLevel <= voiceSustainLevel)
+                {
+                    envelopeLevel = voiceSustainLevel;
+                    envelopeState = EnvelopeState::Sustain;
+                    DebugLogger::log("Voice: Transitioned to Sustain state with level: " + std::to_string(voiceSustainLevel));
+                }
+            }
+            else
+            {
+                // If decay rate is 0, jump straight to sustain level and sustain phase
                 envelopeLevel = voiceSustainLevel;
                 envelopeState = EnvelopeState::Sustain;
+                DebugLogger::log("Voice: Jumped to Sustain state with level: " + std::to_string(voiceSustainLevel));
             }
             break;
             
         case EnvelopeState::Sustain:
-            // Maintain the sustain level
+            // Always explicitly set the envelope level to the sustain level
+            // This ensures it never decreases over time
             envelopeLevel = voiceSustainLevel;
             break;
             
         case EnvelopeState::Release:
             // Decrement envelope level during release phase
             // Apply the rate for each sample in the block
-            envelopeLevel -= voiceReleaseRate * numSamples;
-            
-            // Check if we've reached zero
-            if (envelopeLevel <= 0.0f)
+            if (voiceReleaseRate > 0.0f)
             {
+                envelopeLevel -= voiceReleaseRate * numSamples;
+                
+                // Check if we've reached zero
+                if (envelopeLevel <= 0.0f)
+                {
+                    envelopeLevel = 0.0f;
+                    envelopeState = EnvelopeState::Idle;
+                    DebugLogger::log("Voice: Transitioned to Idle state");
+                }
+            }
+            else
+            {
+                // If release rate is 0, jump straight to zero level and idle state
                 envelopeLevel = 0.0f;
                 envelopeState = EnvelopeState::Idle;
+                DebugLogger::log("Voice: Jumped to Idle state");
             }
             break;
             
@@ -119,6 +145,13 @@ void Voice::processBlock(juce::AudioBuffer<float>& buffer, int startSample, int 
     if (envelopeState == EnvelopeState::Idle || !sampleBuffer || sampleBuffer->getNumSamples() == 0)
         return;
     
+    // Ensure envelope level is correct for sustain state
+    if (envelopeState == EnvelopeState::Sustain && envelopeLevel != voiceSustainLevel)
+    {
+        envelopeLevel = voiceSustainLevel;
+        DebugLogger::log("Voice: Fixed envelope level in processBlock: " + std::to_string(voiceSustainLevel));
+    }
+    
     // Calculate pan gains
     float leftGain = volume * masterVolume * (pan <= 0.0f ? 1.0f : 1.0f - pan);
     float rightGain = volume * masterVolume * (pan >= 0.0f ? 1.0f : 1.0f + pan);
@@ -126,6 +159,29 @@ void Voice::processBlock(juce::AudioBuffer<float>& buffer, int startSample, int 
     // Apply envelope to gains
     leftGain *= envelopeLevel;
     rightGain *= envelopeLevel;
+    
+    // Periodically log the envelope level and gain to help diagnose volume issues
+    static int logCounter = 0;
+    if (++logCounter >= 1000) // Log every 1000 blocks to avoid flooding
+    {
+        logCounter = 0;
+        if (envelopeState == EnvelopeState::Sustain)
+        {
+            DebugLogger::log("Voice Sustain Stats - Envelope Level: " + std::to_string(envelopeLevel) + 
+                            ", Sustain Level: " + std::to_string(voiceSustainLevel) + 
+                            ", Volume: " + std::to_string(volume) + 
+                            ", Master Volume: " + std::to_string(masterVolume) + 
+                            ", Left Gain: " + std::to_string(leftGain) + 
+                            ", Right Gain: " + std::to_string(rightGain));
+            
+            // Ensure envelope level is at sustain level during sustained playback
+            if (envelopeLevel != voiceSustainLevel)
+            {
+                envelopeLevel = voiceSustainLevel;
+                DebugLogger::log("Voice: Corrected envelope level to match sustain level: " + std::to_string(voiceSustainLevel));
+            }
+        }
+    }
     
     // Process audio for each channel
     for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
@@ -179,8 +235,19 @@ void Voice::noteOff()
     // Only transition to release state if not already in release or idle
     if (envelopeState != EnvelopeState::Release && envelopeState != EnvelopeState::Idle)
     {
+        DebugLogger::log("Voice::noteOff - Transitioning from " + 
+                         std::string(envelopeState == EnvelopeState::Attack ? "Attack" : 
+                                    envelopeState == EnvelopeState::Decay ? "Decay" : "Sustain") + 
+                         " to Release state. Current level: " + std::to_string(envelopeLevel));
+        
         envelopeState = EnvelopeState::Release;
         isReleasing = true;
+    }
+    else
+    {
+        DebugLogger::log("Voice::noteOff - Already in " + 
+                         std::string(envelopeState == EnvelopeState::Release ? "Release" : "Idle") + 
+                         " state. Current level: " + std::to_string(envelopeLevel));
     }
 }
 

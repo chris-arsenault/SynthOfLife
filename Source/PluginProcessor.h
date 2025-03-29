@@ -149,10 +149,11 @@ private:
         int cellX;
         int cellY;
         double triggerTime;
+        bool active;
         
         ScheduledSample(int index, float vel, int pitch, int x, int y, double time)
             : sampleIndex(index), velocity(vel), pitchShift(pitch), 
-              cellX(x), cellY(y), triggerTime(time) {}
+              cellX(x), cellY(y), triggerTime(time), active(true) {}
     };
     
     // Queue of samples scheduled to be triggered with delay

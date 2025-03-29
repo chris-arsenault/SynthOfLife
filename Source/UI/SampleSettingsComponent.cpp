@@ -65,10 +65,25 @@ SampleSettingsComponent::SampleSettingsComponent(ParameterManager& pm, int start
         controls->velocityModeButton.setToggleState(true, juce::dontSendNotification); // Default to enabled
         addAndMakeVisible(controls->velocityModeButton);
         
-        // Set up pitch mode button
-        controls->pitchModeButton.setButtonText("Pitch Mode");
-        controls->pitchModeButton.setToggleState(false, juce::dontSendNotification); // Default to disabled
-        addAndMakeVisible(controls->pitchModeButton);
+        // Set up MIDI pitch control button with listener to enable/disable row pitch button
+        controls->midiPitchButton.setButtonText("MIDI Pitch");
+        controls->midiPitchButton.setToggleState(false, juce::dontSendNotification); // Default to disabled
+        controls->midiPitchButton.onClick = [this, controls]() {
+            // Enable or disable the row pitch button based on MIDI pitch state
+            controls->rowPitchButton.setEnabled(controls->midiPitchButton.getToggleState());
+            
+            // If MIDI pitch is disabled, also uncheck row pitch
+            if (!controls->midiPitchButton.getToggleState()) {
+                controls->rowPitchButton.setToggleState(false, juce::sendNotification);
+            }
+        };
+        addAndMakeVisible(controls->midiPitchButton);
+        
+        // Set up row pitch control button (initially disabled)
+        controls->rowPitchButton.setButtonText("Row Pitch");
+        controls->rowPitchButton.setToggleState(false, juce::dontSendNotification); // Default to disabled
+        controls->rowPitchButton.setEnabled(false); // Initially disabled since MIDI pitch is off by default
+        addAndMakeVisible(controls->rowPitchButton);
         
         // Set up timing mode button
         controls->timingModeButton.setButtonText("Timing Mode");
@@ -112,8 +127,11 @@ SampleSettingsComponent::SampleSettingsComponent(ParameterManager& pm, int start
         controls->velocityModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             apvts, "velocity_mode_" + juce::String(sampleIndex), controls->velocityModeButton);
             
-        controls->pitchModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-            apvts, "pitch_mode_" + juce::String(sampleIndex), controls->pitchModeButton);
+        controls->midiPitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            apvts, "midi_pitch_" + juce::String(sampleIndex), controls->midiPitchButton);
+            
+        controls->rowPitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            apvts, "row_pitch_" + juce::String(sampleIndex), controls->rowPitchButton);
             
         controls->timingModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             apvts, "timing_mode_" + juce::String(sampleIndex), controls->timingModeButton);
@@ -195,8 +213,12 @@ void SampleSettingsComponent::resized()
         controls->velocityModeButton.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
         controlY += controlHeight + controlSpacing;
         
-        // Pitch mode button
-        controls->pitchModeButton.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
+        // MIDI pitch control button
+        controls->midiPitchButton.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
+        controlY += controlHeight + controlSpacing;
+        
+        // Row pitch control button
+        controls->rowPitchButton.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
         controlY += controlHeight + controlSpacing;
         
         // Timing mode button
