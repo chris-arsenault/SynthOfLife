@@ -70,6 +70,11 @@ SampleSettingsComponent::SampleSettingsComponent(ParameterManager& pm, int start
         controls->pitchModeButton.setToggleState(false, juce::dontSendNotification); // Default to disabled
         addAndMakeVisible(controls->pitchModeButton);
         
+        // Set up timing mode button
+        controls->timingModeButton.setButtonText("Timing Mode");
+        controls->timingModeButton.setToggleState(false, juce::dontSendNotification); // Default to disabled
+        addAndMakeVisible(controls->timingModeButton);
+        
         // Set up mute button
         controls->muteButton.setButtonText("Mute");
         controls->muteButton.setToggleState(false, juce::dontSendNotification);
@@ -109,6 +114,9 @@ SampleSettingsComponent::SampleSettingsComponent(ParameterManager& pm, int start
             
         controls->pitchModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             apvts, "pitch_mode_" + juce::String(sampleIndex), controls->pitchModeButton);
+            
+        controls->timingModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            apvts, "timing_mode_" + juce::String(sampleIndex), controls->timingModeButton);
             
         controls->legatoAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             apvts, "legato_" + juce::String(sampleIndex), controls->legatoButton);
@@ -189,6 +197,10 @@ void SampleSettingsComponent::resized()
         
         // Pitch mode button
         controls->pitchModeButton.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
+        controlY += controlHeight + controlSpacing;
+        
+        // Timing mode button
+        controls->timingModeButton.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
         controlY += controlHeight + controlSpacing;
         
         // Mute button

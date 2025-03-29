@@ -140,6 +140,31 @@ private:
     // Game of Life
     std::unique_ptr<GameOfLife> gameOfLife;
     
+    // Scheduled sample data structure
+    struct ScheduledSample
+    {
+        int sampleIndex;
+        float velocity;
+        int pitchShift;
+        int cellX;
+        int cellY;
+        double triggerTime;
+        
+        ScheduledSample(int index, float vel, int pitch, int x, int y, double time)
+            : sampleIndex(index), velocity(vel), pitchShift(pitch), 
+              cellX(x), cellY(y), triggerTime(time) {}
+    };
+    
+    // Queue of samples scheduled to be triggered with delay
+    std::vector<ScheduledSample> scheduledSamples;
+    
+    // Schedule a sample to be triggered with a delay
+    void scheduleSampleWithDelay(int sampleIndex, float velocity, int pitchShift, 
+                                int cellX, int cellY, float delayMs);
+    
+    // Process any scheduled samples that are due to be triggered
+    void processScheduledSamples(double currentTime);
+    
     // MIDI clock counter
     int midiClockCounter = 0;
     

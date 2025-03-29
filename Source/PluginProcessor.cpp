@@ -183,6 +183,17 @@ void DrumMachineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
     
+    // Get current playhead info
+    juce::AudioPlayHead::CurrentPositionInfo posInfo;
+    if (auto* playHead = getPlayHead())
+        playHead->getCurrentPosition(posInfo);
+        
+    // Calculate current time in seconds
+    double currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+    
+    // Process any scheduled samples that are due to be triggered
+    processScheduledSamples(currentTime);
+    
     // Process MIDI messages
     processMidiMessages(midiMessages);
     
@@ -190,7 +201,6 @@ void DrumMachineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     if (isAnyNoteActive())
     {
         // Always use system time to ensure updates happen regardless of host play state
-        double currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
         double bpm = 120.0; // Default BPM
         
         // Try to get host tempo, but don't rely on host play state
@@ -376,7 +386,8 @@ void DrumMachineAudioProcessor::processGameOfLife()
                 
                 // Calculate pitch shift if needed
                 int totalPitchShift = 0;
-                if (controlMode == ColumnControlMode::Pitch || controlMode == ColumnControlMode::Both)
+                if (controlMode == ColumnControlMode::Pitch || controlMode == ColumnControlMode::Both || 
+                    controlMode == ColumnControlMode::All)
                 {
                     // Calculate pitch shift based on MIDI note and row position
                     int basePitchShift = mostRecentMidiNote - MIDDLE_C;
@@ -388,8 +399,17 @@ void DrumMachineAudioProcessor::processGameOfLife()
                     totalPitchShift = basePitchShift + rowPitchOffset;
                 }
                 
+                // Calculate timing delay if needed
+                float delayMs = 0.0f;
+                if (controlMode == ColumnControlMode::Timing || controlMode == ColumnControlMode::All)
+                {
+                    // Get row-based timing delay (0-160ms)
+                    delayMs = parameterManager->getTimingDelayForRow(row);
+                }
+                
                 // If velocity mode is not active, use a fixed velocity
-                if (controlMode != ColumnControlMode::Velocity && controlMode != ColumnControlMode::Both)
+                if (controlMode != ColumnControlMode::Velocity && controlMode != ColumnControlMode::Both && 
+                    controlMode != ColumnControlMode::All)
                 {
                     velocity = 0.8f; // Use a fixed velocity when not in velocity mode
                 }
@@ -398,15 +418,30 @@ void DrumMachineAudioProcessor::processGameOfLife()
                 if (gameOfLife->cellJustActivated(i, j))
                 {
                     // Cell just turned on - trigger sample from beginning
-                    if (controlMode == ColumnControlMode::Pitch || controlMode == ColumnControlMode::Both)
+                    if (controlMode == ColumnControlMode::Timing || controlMode == ColumnControlMode::All)
                     {
-                        // Trigger with pitch shift for this specific cell
-                        drumPads[sampleIndex].triggerSampleWithPitchForCell(velocity, totalPitchShift, i, j);
+                        // If timing mode is active, schedule the sample to be triggered with a delay
+                        if (controlMode == ColumnControlMode::Pitch || controlMode == ColumnControlMode::Both || 
+                            controlMode == ColumnControlMode::All)
+                        {
+                            // Schedule with both pitch shift and delay
+                            scheduleSampleWithDelay(sampleIndex, velocity, totalPitchShift, j, i, delayMs);
+                        }
+                        else
+                        {
+                            // Schedule with delay only
+                            scheduleSampleWithDelay(sampleIndex, velocity, 0, j, i, delayMs);
+                        }
+                    }
+                    else if (controlMode == ColumnControlMode::Pitch || controlMode == ColumnControlMode::Both)
+                    {
+                        // Trigger with pitch shift for this specific cell (no delay)
+                        drumPads[sampleIndex].triggerSampleWithPitchForCell(velocity, totalPitchShift, j, i);
                     }
                     else
                     {
-                        // Default behavior (velocity control only) for this specific cell
-                        drumPads[sampleIndex].triggerSampleForCell(velocity, i, j);
+                        // Default behavior (velocity control only) for this specific cell (no delay)
+                        drumPads[sampleIndex].triggerSampleForCell(velocity, j, i);
                     }
                 }
                 // Check if cell remains on
@@ -418,15 +453,30 @@ void DrumMachineAudioProcessor::processGameOfLife()
                     if (!isLegato)
                     {
                         // Not legato - retrigger sample from beginning
-                        if (controlMode == ColumnControlMode::Pitch || controlMode == ColumnControlMode::Both)
+                        if (controlMode == ColumnControlMode::Timing || controlMode == ColumnControlMode::All)
                         {
-                            // Trigger with pitch shift for this specific cell
-                            drumPads[sampleIndex].triggerSampleWithPitchForCell(velocity, totalPitchShift, i, j);
+                            // If timing mode is active, schedule the sample to be triggered with a delay
+                            if (controlMode == ColumnControlMode::Pitch || controlMode == ColumnControlMode::Both || 
+                                controlMode == ColumnControlMode::All)
+                            {
+                                // Schedule with both pitch shift and delay
+                                scheduleSampleWithDelay(sampleIndex, velocity, totalPitchShift, j, i, delayMs);
+                            }
+                            else
+                            {
+                                // Schedule with delay only
+                                scheduleSampleWithDelay(sampleIndex, velocity, 0, j, i, delayMs);
+                            }
+                        }
+                        else if (controlMode == ColumnControlMode::Pitch || controlMode == ColumnControlMode::Both)
+                        {
+                            // Trigger with pitch shift for this specific cell (no delay)
+                            drumPads[sampleIndex].triggerSampleWithPitchForCell(velocity, totalPitchShift, j, i);
                         }
                         else
                         {
-                            // Default behavior (velocity control only) for this specific cell
-                            drumPads[sampleIndex].triggerSampleForCell(velocity, i, j);
+                            // Default behavior (velocity control only) for this specific cell (no delay)
+                            drumPads[sampleIndex].triggerSampleForCell(velocity, j, i);
                         }
                     }
                     // If legato, continue playing the sample (do nothing)
@@ -435,7 +485,7 @@ void DrumMachineAudioProcessor::processGameOfLife()
                 else if (gameOfLife->cellJustDeactivated(i, j))
                 {
                     // Cell just turned off - stop sample with release for this specific cell
-                    drumPads[sampleIndex].stopSampleForCell(i, j);
+                    drumPads[sampleIndex].stopSampleForCell(j, i);
                 }
             }
         }
@@ -457,7 +507,7 @@ juce::AudioProcessorEditor* DrumMachineAudioProcessor::createEditor()
 void DrumMachineAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     // Create a root XML element to store all state
-    juce::XmlElement rootXml("SynthOfLifeState");
+    juce::XmlElement rootXml("DrumMachineState");
     
     // Store parameters
     auto state = parameterManager->getAPVTS().copyState();
@@ -489,7 +539,7 @@ void DrumMachineAudioProcessor::setStateInformation (const void* data, int sizeI
     // Parse the XML from the memory block
     std::unique_ptr<juce::XmlElement> rootXml(getXmlFromBinary(data, sizeInBytes));
     
-    if (rootXml != nullptr && rootXml->hasTagName("SynthOfLifeState"))
+    if (rootXml != nullptr && rootXml->hasTagName("DrumMachineState"))
     {
         // Restore parameters
         juce::XmlElement* paramsXml = rootXml->getChildByName("Parameters");
@@ -672,3 +722,47 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new DrumMachineAudioProcessor();
 }
+
+void DrumMachineAudioProcessor::scheduleSampleWithDelay(int sampleIndex, float velocity, int pitchShift, 
+                                                      int cellX, int cellY, float delayMs)
+{
+    // Calculate the trigger time based on current time plus delay
+    double currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+    double triggerTime = currentTime + (delayMs / 1000.0); // Convert ms to seconds
+    
+    // Create a scheduled sample and add it to the queue
+    scheduledSamples.emplace_back(sampleIndex, velocity, pitchShift, cellX, cellY, triggerTime);
+}
+
+void DrumMachineAudioProcessor::processScheduledSamples(double currentTime)
+{
+    // Process any scheduled samples that are due to be triggered
+    auto it = scheduledSamples.begin();
+    while (it != scheduledSamples.end())
+    {
+        if (currentTime >= it->triggerTime)
+        {
+            // Time to trigger this sample
+            if (it->pitchShift != 0)
+            {
+                // Trigger with pitch shift
+                drumPads[it->sampleIndex].triggerSampleWithPitchForCell(it->velocity, it->pitchShift, it->cellY, it->cellX);
+            }
+            else
+            {
+                // Trigger without pitch shift
+                drumPads[it->sampleIndex].triggerSampleForCell(it->velocity, it->cellY, it->cellX);
+            }
+            
+            // Remove this sample from the queue
+            it = scheduledSamples.erase(it);
+        }
+        else
+        {
+            // Not yet time to trigger this sample
+            ++it;
+        }
+    }
+}
+
+//==============================================================================
