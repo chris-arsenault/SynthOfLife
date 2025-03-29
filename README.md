@@ -21,6 +21,18 @@ A creative VST3 audio generator plugin that combines Conway's Game of Life with 
 
 ## Changelog
 
+### Version 1.5.0 (March 29, 2025)
+
+#### Timing Control Enhancements
+- **Dynamic Maximum Timing Delay**: Added a parameter to control the maximum timing delay (10ms to 1000ms)
+- **Flexible Timing Effects**: Users can now adjust the timing delay range from subtle variations to dramatic echo-like effects
+- **Enhanced Rhythmic Possibilities**: Greater control over how timing mode affects the rhythmic feel of generated patterns
+
+#### Technical Improvements
+- Refactored timing delay calculation to use a dynamic maximum value instead of a static one
+- Added UI control in the main tab for adjusting the maximum timing delay
+- Improved timing mode to scale all row delays proportionally when the maximum value changes
+
 ### Version 1.4.0 (March 29, 2025)
 
 #### Column Control Enhancements

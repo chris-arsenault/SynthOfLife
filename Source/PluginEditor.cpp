@@ -26,6 +26,8 @@ DrumMachineAudioProcessorEditor::DrumMachineAudioProcessorEditor (DrumMachineAud
       intervalLabel(),
       intervalTypeBox(),
       intervalValueBox(),
+      maxTimingDelayLabel(),
+      maxTimingDelaySlider(),
       currentSection(0),
       beatsPerBar(4.0),
       lastBeatPosition(0.0)
@@ -164,6 +166,21 @@ DrumMachineAudioProcessorEditor::DrumMachineAudioProcessorEditor (DrumMachineAud
     intervalValueAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         p.getParameterManager().getAPVTS(), "intervalValue", intervalValueBox);
     
+    // Set up maximum timing delay control
+    addAndMakeVisible(maxTimingDelayLabel);
+    addAndMakeVisible(maxTimingDelaySlider);
+    
+    maxTimingDelayLabel.setText("Max Timing Delay (ms):", juce::dontSendNotification);
+    maxTimingDelayLabel.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::bold));
+    
+    maxTimingDelaySlider.setRange(10.0, 1000.0, 1.0);
+    maxTimingDelaySlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    maxTimingDelaySlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 50, 20);
+    
+    // Create attachment for maximum timing delay slider
+    maxTimingDelayAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        p.getParameterManager().getAPVTS(), "maxTimingDelay", maxTimingDelaySlider);
+    
     // Create the attachment to link the combobox to the parameter
     scaleSelectorAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         p.getParameterManager().getAPVTS(), "musicalScale", scaleSelector);
@@ -186,6 +203,8 @@ DrumMachineAudioProcessorEditor::DrumMachineAudioProcessorEditor (DrumMachineAud
     mainTab.addAndMakeVisible(intervalLabel);
     mainTab.addAndMakeVisible(intervalTypeBox);
     mainTab.addAndMakeVisible(intervalValueBox);
+    mainTab.addAndMakeVisible(maxTimingDelayLabel);
+    mainTab.addAndMakeVisible(maxTimingDelaySlider);
     
     // Add section iteration controls to the main tab
     for (int i = 0; i < 4; ++i)
@@ -276,10 +295,12 @@ void DrumMachineAudioProcessorEditor::resized()
     scaleSelector.setBounds(scaleArea.removeFromLeft(200));
     
     // Position the interval controls below the scale selector
-    auto intervalArea = mainTabArea.removeFromTop(30);
+    auto intervalArea = mainTabArea.removeFromTop(60);
     intervalLabel.setBounds(intervalArea.removeFromLeft(120));
     intervalTypeBox.setBounds(intervalArea.removeFromLeft(150));
     intervalValueBox.setBounds(intervalArea.removeFromLeft(150));
+    maxTimingDelayLabel.setBounds(intervalArea.removeFromLeft(120));
+    maxTimingDelaySlider.setBounds(intervalArea.removeFromLeft(150));
     
     // Position the section iteration controls
     auto sectionsArea = mainTabArea.removeFromTop(240); // 60 height per section

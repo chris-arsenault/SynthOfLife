@@ -63,6 +63,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
             "Sample " + juce::String(i + 1) + " Pitch Mode",
             false)); // Default to pitch mode disabled
             
+        layout.add(std::make_unique<juce::AudioParameterBool>(
+            "timing_mode_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Timing Mode",
+            false)); // Default to timing mode disabled
+            
         // Legato mode parameter
         layout.add(std::make_unique<juce::AudioParameterBool>(
             "legato_" + juce::String(i),
@@ -135,6 +140,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
         noteNames,
         0));  // Default to C
         
+    // Maximum timing delay parameter
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        "maxTimingDelay",
+        "Max Timing Delay",
+        10.0f, 1000.0f, 160.0f));  // Range 10-1000ms (1 second), default 160ms
+        
     // Add section iteration parameters
     for (int i = 0; i < 4; ++i)
     {
@@ -176,6 +187,7 @@ void ParameterManager::initializeParameters()
     polyphonyParams.resize(NUM_SAMPLES);
     velocityModeParams.resize(NUM_SAMPLES);
     pitchModeParams.resize(NUM_SAMPLES);
+    timingModeParams.resize(NUM_SAMPLES);
     legatoParams.resize(NUM_SAMPLES);
     attackParams.resize(NUM_SAMPLES);
     decayParams.resize(NUM_SAMPLES);
@@ -191,6 +203,7 @@ void ParameterManager::initializeParameters()
         polyphonyParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("polyphony_" + juce::String(i)));
         velocityModeParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("velocity_mode_" + juce::String(i)));
         pitchModeParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("pitch_mode_" + juce::String(i)));
+        timingModeParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("timing_mode_" + juce::String(i)));
         legatoParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("legato_" + juce::String(i)));
         attackParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("attack_" + juce::String(i)));
         decayParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("decay_" + juce::String(i)));
@@ -203,6 +216,7 @@ void ParameterManager::initializeParameters()
     
     musicalScaleParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("musicalScale"));
     rootNoteParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rootNote"));
+    maxTimingDelayParam = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("maxTimingDelay"));
     
     for (int i = 0; i < 4; ++i)
     {
@@ -262,6 +276,13 @@ juce::AudioParameterBool* ParameterManager::getPitchModeParam(int sampleIndex)
     return nullptr;
 }
 
+juce::AudioParameterBool* ParameterManager::getTimingModeParam(int sampleIndex)
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return timingModeParams[sampleIndex];
+    return nullptr;
+}
+
 juce::AudioParameterBool* ParameterManager::getLegatoParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
@@ -315,6 +336,11 @@ juce::AudioParameterChoice* ParameterManager::getScaleParam()
 juce::AudioParameterChoice* ParameterManager::getRootNoteParam()
 {
     return rootNoteParam;
+}
+
+juce::AudioParameterFloat* ParameterManager::getMaxTimingDelayParam()
+{
+    return maxTimingDelayParam;
 }
 
 juce::AudioParameterInt* ParameterManager::getSectionBarsParam(int sectionIndex)
@@ -380,12 +406,17 @@ ColumnControlMode ParameterManager::getControlModeForColumn(int column) const
 
 ColumnControlMode ParameterManager::getControlModeForSample(int sampleIndex) const
 {
-    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && velocityModeParams[sampleIndex] != nullptr && pitchModeParams[sampleIndex] != nullptr)
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && velocityModeParams[sampleIndex] != nullptr && pitchModeParams[sampleIndex] != nullptr && timingModeParams[sampleIndex] != nullptr)
     {
         bool velocityEnabled = velocityModeParams[sampleIndex]->get();
         bool pitchEnabled = pitchModeParams[sampleIndex]->get();
+        bool timingEnabled = timingModeParams[sampleIndex]->get();
         
-        if (velocityEnabled && pitchEnabled)
+        if (velocityEnabled && pitchEnabled && timingEnabled)
+        {
+            return ColumnControlMode::All;
+        }
+        else if (velocityEnabled && pitchEnabled)
         {
             return ColumnControlMode::Both;
         }
@@ -396,6 +427,10 @@ ColumnControlMode ParameterManager::getControlModeForSample(int sampleIndex) con
         else if (pitchEnabled)
         {
             return ColumnControlMode::Pitch;
+        }
+        else if (timingEnabled)
+        {
+            return ColumnControlMode::Timing;
         }
         else
         {
@@ -519,106 +554,61 @@ float ParameterManager::getReleaseForSample(int sampleIndex) const
 
 int ParameterManager::getPitchOffsetForRow(int row) const
 {
-    // Map row to a pitch offset in the range -7 to +8
-    // Row 0 (top) maps to +8, Row (GRID_SIZE-1) (bottom) maps to -7
+    if (row < 0 || row >= GRID_SIZE)
+        return 0;
+        
+    // Get the current scale
+    MusicalScale currentScale = static_cast<MusicalScale>(musicalScaleParam->getIndex());
     
-    // Normalize the row position (invert it since we want top row to be highest pitch)
-    float normalizedRow = 1.0f - (static_cast<float>(row) / static_cast<float>(GRID_SIZE - 1));
+    // Get the scale pattern for the current scale
+    const std::vector<int>& pattern = getScalePattern(currentScale);
     
-    // Scale to the range -7 to +8 (16 possible values)
-    int rawOffset = static_cast<int>(normalizedRow * 15.0f) - 7;
+    // Calculate the octave and step within the octave
+    int octave = row / pattern.size();
+    int step = row % pattern.size();
     
-    // Clamp to ensure we're in the correct range
-    int offset = juce::jlimit(-7, 8, rawOffset);
+    // Calculate the pitch offset
+    // Each row moves up in the scale, with octave jumps as needed
+    return octave * 12 + pattern[step];
+}
+
+float ParameterManager::getTimingDelayForRow(int row) const
+{
+    if (row < 0 || row >= GRID_SIZE)
+        return 0.0f;
+        
+    // Calculate delay from 0ms to maxTimingDelay based on row position
+    // Each row represents an equal increment
+    const float MAX_DELAY_MS = maxTimingDelayParam->get();
+    return (static_cast<float>(row) / static_cast<float>(GRID_SIZE - 1)) * MAX_DELAY_MS;
+}
+
+const std::vector<int>& ParameterManager::getScalePattern(MusicalScale scale) const
+{
+    // Define scale patterns (semitone intervals from the root note)
+    static const std::vector<int> majorScale = { 0, 2, 4, 5, 7, 9, 11 };
+    static const std::vector<int> naturalMinorScale = { 0, 2, 3, 5, 7, 8, 10 };
+    static const std::vector<int> harmonicMinorScale = { 0, 2, 3, 5, 7, 8, 11 };
+    static const std::vector<int> chromaticScale = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
+    static const std::vector<int> pentatonicScale = { 0, 2, 4, 7, 9 };
+    static const std::vector<int> bluesScale = { 0, 3, 5, 6, 7, 10 };
     
-    // Apply scale mapping based on the selected musical scale
-    MusicalScale scale = getSelectedScale();
-    
-    // If we're using a chromatic scale, return the raw offset
-    if (scale == MusicalScale::Chromatic)
-    {
-        return offset;
-    }
-    
-    // Define scale patterns (semitone offsets from root)
-    // Each scale has a unique pattern of intervals
-    const int majorScale[7] = { 0, 2, 4, 5, 7, 9, 11 }; // Major scale: W-W-H-W-W-W-H
-    const int naturalMinorScale[7] = { 0, 2, 3, 5, 7, 8, 10 }; // Natural minor: W-H-W-W-H-W-W
-    const int harmonicMinorScale[7] = { 0, 2, 3, 5, 7, 8, 11 }; // Harmonic minor: W-H-W-W-H-WH-H
-    const int pentatonicScale[5] = { 0, 2, 4, 7, 9 }; // Major pentatonic: W-W-W½-W-W½
-    const int bluesScale[6] = { 0, 3, 5, 6, 7, 10 }; // Blues scale: W½-W-H-H-W½-W
-    
-    // Map the offset to the appropriate scale degree
-    int octaveOffset = 0;
-    int scaleIndex = 0;
-    
-    // Handle negative and positive offsets
-    if (offset < 0)
-    {
-        octaveOffset = -1 - ((-offset - 1) / 7);
-        scaleIndex = (-offset - 1) % 7;
-        if (scaleIndex < 0) scaleIndex += 7;
-    }
-    else
-    {
-        octaveOffset = offset / 7;
-        scaleIndex = offset % 7;
-    }
-    
-    // Get the scale degree based on the selected scale
-    int scaleDegree = 0;
-    
+    // Return the appropriate scale pattern based on the selected scale
     switch (scale)
     {
         case MusicalScale::Major:
-            scaleDegree = (scaleIndex < 7) ? majorScale[scaleIndex] : 12 + majorScale[scaleIndex - 7];
-            break;
-            
+            return majorScale;
         case MusicalScale::NaturalMinor:
-            scaleDegree = (scaleIndex < 7) ? naturalMinorScale[scaleIndex] : 12 + naturalMinorScale[scaleIndex - 7];
-            break;
-            
+            return naturalMinorScale;
         case MusicalScale::HarmonicMinor:
-            scaleDegree = (scaleIndex < 7) ? harmonicMinorScale[scaleIndex] : 12 + harmonicMinorScale[scaleIndex - 7];
-            break;
-            
+            return harmonicMinorScale;
+        case MusicalScale::Chromatic:
+            return chromaticScale;
         case MusicalScale::Pentatonic:
-            // Handle pentatonic scale (5 notes per octave)
-            if (offset < 0)
-            {
-                octaveOffset = -1 - ((-offset - 1) / 5);
-                scaleIndex = (-offset - 1) % 5;
-                if (scaleIndex < 0) scaleIndex += 5;
-            }
-            else
-            {
-                octaveOffset = offset / 5;
-                scaleIndex = offset % 5;
-            }
-            scaleDegree = (scaleIndex < 5) ? pentatonicScale[scaleIndex] : 12 + pentatonicScale[scaleIndex - 5];
-            break;
-            
+            return pentatonicScale;
         case MusicalScale::Blues:
-            // Handle blues scale (6 notes per octave)
-            if (offset < 0)
-            {
-                octaveOffset = -1 - ((-offset - 1) / 6);
-                scaleIndex = (-offset - 1) % 6;
-                if (scaleIndex < 0) scaleIndex += 6;
-            }
-            else
-            {
-                octaveOffset = offset / 6;
-                scaleIndex = offset % 6;
-            }
-            scaleDegree = (scaleIndex < 6) ? bluesScale[scaleIndex] : 12 + bluesScale[scaleIndex - 6];
-            break;
-            
+            return bluesScale;
         default:
-            // Default to chromatic if something goes wrong
-            return offset;
+            return majorScale; // Default to major scale
     }
-    
-    // Calculate the final pitch offset
-    return octaveOffset * 12 + scaleDegree;
 }

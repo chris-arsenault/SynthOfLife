@@ -29,7 +29,9 @@ enum class ColumnControlMode
     None = 0,
     Velocity = 1,
     Pitch = 2,
-    Both = Velocity | Pitch
+    Timing = 4,
+    Both = Velocity | Pitch,
+    All = Velocity | Pitch | Timing
 };
 
 // Musical scales
@@ -67,6 +69,7 @@ public:
     juce::AudioParameterInt* getPolyphonyParam(int sampleIndex);
     juce::AudioParameterBool* getVelocityModeParam(int sampleIndex);
     juce::AudioParameterBool* getPitchModeParam(int sampleIndex);
+    juce::AudioParameterBool* getTimingModeParam(int sampleIndex);
     juce::AudioParameterBool* getLegatoParam(int sampleIndex);
     juce::AudioParameterFloat* getAttackParam(int sampleIndex);
     juce::AudioParameterFloat* getDecayParam(int sampleIndex);
@@ -77,6 +80,7 @@ public:
     juce::AudioParameterChoice* getIntervalValueParam();
     juce::AudioParameterChoice* getScaleParam();
     juce::AudioParameterChoice* getRootNoteParam();
+    juce::AudioParameterFloat* getMaxTimingDelayParam();
     
     // Section iteration parameters
     juce::AudioParameterInt* getSectionBarsParam(int sectionIndex);
@@ -131,6 +135,12 @@ public:
     // Returns a semitone offset in the range -7 to +8
     int getPitchOffsetForRow(int row) const;
     
+    // Get the timing delay for a specific row (0-160ms)
+    float getTimingDelayForRow(int row) const;
+    
+    // Get the scale pattern for a given scale
+    const std::vector<int>& getScalePattern(MusicalScale scale) const;
+    
     // Get the AudioProcessorValueTreeState
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
     
@@ -149,6 +159,7 @@ private:
     std::vector<juce::AudioParameterInt*> polyphonyParams;
     std::vector<juce::AudioParameterBool*> velocityModeParams;
     std::vector<juce::AudioParameterBool*> pitchModeParams;
+    std::vector<juce::AudioParameterBool*> timingModeParams;
     std::vector<juce::AudioParameterBool*> legatoParams;
     std::vector<juce::AudioParameterFloat*> attackParams;
     std::vector<juce::AudioParameterFloat*> decayParams;
@@ -159,6 +170,7 @@ private:
     juce::AudioParameterChoice* intervalValueParam = nullptr;
     juce::AudioParameterChoice* musicalScaleParam = nullptr;
     juce::AudioParameterChoice* rootNoteParam = nullptr;
+    juce::AudioParameterFloat* maxTimingDelayParam = nullptr;
     
     // Section iteration parameters
     juce::AudioParameterInt* sectionBarsParams[4] = { nullptr };

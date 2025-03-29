@@ -71,6 +71,11 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> intervalTypeAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> intervalValueAttachment;
 
+    // Maximum timing delay control
+    juce::Label maxTimingDelayLabel;
+    juce::Slider maxTimingDelaySlider;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> maxTimingDelayAttachment;
+
     // Section iteration controls
     struct SectionControls {
         juce::Label titleLabel;
