@@ -100,6 +100,14 @@ SampleSettingsComponent::SampleSettingsComponent(ParameterManager& pm, int start
         controls->legatoButton.setToggleState(true, juce::dontSendNotification); // Default to true (current behavior)
         addAndMakeVisible(controls->legatoButton);
         
+        // Set up output selector
+        controls->outputSelector.addItem("Main Output", 1);
+        for (int j = 1; j <= 16; ++j) {
+            controls->outputSelector.addItem("Output " + juce::String(j), j + 1);
+        }
+        controls->outputSelector.setSelectedItemIndex(0); // Default to main output
+        addAndMakeVisible(controls->outputSelector);
+        
         // Set up ADSR component
         controls->adsrComponent.addListener(this);
         // Set default ADSR values
@@ -138,6 +146,9 @@ SampleSettingsComponent::SampleSettingsComponent(ParameterManager& pm, int start
             
         controls->legatoAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             apvts, "legato_" + juce::String(sampleIndex), controls->legatoButton);
+            
+        controls->outputAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            apvts, "output_" + juce::String(sampleIndex), controls->outputSelector);
         
         // Connect ADSR controls to parameters
         controls->adsrComponent.connectToParameters(apvts, sampleIndex);
@@ -233,8 +244,12 @@ void SampleSettingsComponent::resized()
         controls->legatoButton.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
         controlY += controlHeight + controlSpacing;
         
+        // Output selector
+        controls->outputSelector.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
+        controlY += controlHeight + controlSpacing;
+        
         // ADSR component - give it more height
-        int adsrHeight = 250; // Increased from 220 to ensure all controls are visible
+        int adsrHeight = 280; // Increased from 250 to ensure all controls are visible
         controls->adsrComponent.setBounds(x + margin, controlY, sampleWidth - 2 * margin, adsrHeight);
     }
 }

@@ -388,7 +388,7 @@ void DrumPad::renderNextBlock(juce::AudioBuffer<float>& buffer, int startSample,
         }
     }
     
-    // Periodically refresh sustained voices to prevent volume decay
+    // Periodically refresh sustained voices
     if (++refreshCounter >= 1000) // Every ~1000 audio blocks
     {
         refreshCounter = 0;
@@ -410,6 +410,58 @@ void DrumPad::renderNextBlock(juce::AudioBuffer<float>& buffer, int startSample,
     if (activeVoiceCount > 0 && activeVoiceCount % 10 == 0) {
         DebugLogger::log("DrumPad::renderNextBlock - Processing " + std::to_string(activeVoiceCount) + 
                         " active voices with volume: " + std::to_string(volume));
+    }
+}
+
+void DrumPad::renderNextBlockToBus(juce::AudioBuffer<float>& buffer, int startSample, int numSamples, int outputBus)
+{
+    if (muted || activeVoices.empty())
+        return;
+    
+    // Only process if this drum pad is assigned to the specified output bus
+    if (this->outputBus != outputBus)
+        return;
+        
+    // Process each active voice
+    int activeVoiceCount = 0;
+    for (auto it = activeVoices.begin(); it != activeVoices.end();)
+    {
+        if (it->isActive())
+        {
+            it->processBlock(buffer, startSample, numSamples, volume, pan);
+            ++it;
+            ++activeVoiceCount;
+        }
+        else
+        {
+            // Remove inactive voices
+            it = activeVoices.erase(it);
+        }
+    }
+    
+    // Periodically refresh sustained voices
+    if (++refreshCounter >= 1000) // Every ~1000 audio blocks
+    {
+        refreshCounter = 0;
+        
+        // Refresh any voices in sustain state
+        for (auto& voice : activeVoices)
+        {
+            if (voice.getEnvelopeState() == Voice::EnvelopeState::Sustain)
+            {
+                // Ensure the envelope level is at the correct sustain level
+                voice.setEnvelopeLevel(voice.getSustainLevel());
+                
+                DebugLogger::log("DrumPad: Refreshed sustained voice - Sustain Level: " + 
+                                std::to_string(voice.getSustainLevel()));
+            }
+        }
+    }
+    
+    if (activeVoiceCount > 0 && activeVoiceCount % 10 == 0) {
+        DebugLogger::log("DrumPad::renderNextBlockToBus - Processing " + std::to_string(activeVoiceCount) + 
+                        " active voices with volume: " + std::to_string(volume) + 
+                        " on output bus: " + std::to_string(outputBus));
     }
 }
 

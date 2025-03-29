@@ -254,7 +254,7 @@ DrumMachineAudioProcessorEditor::DrumMachineAudioProcessorEditor (DrumMachineAud
     
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
-    setSize (800, 800);
+    setSize (800, 900);
     
     // Start the timer for UI updates
     startTimerHz(30);

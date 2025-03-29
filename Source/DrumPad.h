@@ -52,6 +52,9 @@ public:
     // Render audio to a buffer
     void renderNextBlock(juce::AudioBuffer<float>& buffer, int startSample, int numSamples);
     
+    // Render audio to a specific output bus
+    void renderNextBlockToBus(juce::AudioBuffer<float>& buffer, int startSample, int numSamples, int outputBus);
+    
     // Release a sample (for ADSR envelope)
     void releaseSample();
     
@@ -66,6 +69,10 @@ public:
     void setMidiNote(int note) { midiNote = note; }
     void setPolyphony(int count) { maxPolyphony = juce::jlimit(1, 16, count); }
     int getPolyphony() const { return maxPolyphony; }
+    
+    // Output bus setter and getter
+    void setOutputBus(int busIndex) { outputBus = busIndex; }
+    int getOutputBus() const { return outputBus; }
     
     // ADSR getters and setters
     void setAttack(float attackTimeMs);
@@ -119,6 +126,7 @@ private:
     bool legatoMode = true; // Default to legato mode (current behavior)
     bool midiPitchEnabled = false; // Default to MIDI pitch control disabled
     bool rowPitchEnabled = false; // Default to row-based pitch control disabled
+    int outputBus = 0; // Default to main output bus
     
     // Track most recently played note information
     int lastPlayedNote = 0;

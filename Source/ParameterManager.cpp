@@ -19,6 +19,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
     // Default MIDI notes for samples (starting with GM drum map and extending)
     const int defaultMidiNotes[NUM_SAMPLES] = { 36, 38, 40, 41, 43, 45, 47, 49, 50, 51, 52, 53, 54, 55, 56, 57 };
     
+    // Create output choices
+    juce::StringArray outputChoices;
+    outputChoices.add("Main Output"); // Output 0
+    for (int i = 1; i < NUM_OUTPUTS; ++i)
+    {
+        outputChoices.add("Output " + juce::String(i)); // Outputs 1-16
+    }
+    
     // Create parameters for each sample
     for (int i = 0; i < NUM_SAMPLES; ++i)
     {
@@ -99,6 +107,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
             "release_" + juce::String(i),
             "Sample " + juce::String(i + 1) + " Release",
             0.1f, 2000.0f, 200.0f));
+            
+        // Output selection parameter
+        layout.add(std::make_unique<juce::AudioParameterChoice>(
+            "output_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Output",
+            outputChoices,
+            0)); // Default to main output (0)
     }
     
     // Interval parameters for Game of Life
@@ -199,7 +214,9 @@ void ParameterManager::initializeParameters()
     decayParams.resize(NUM_SAMPLES);
     sustainParams.resize(NUM_SAMPLES);
     releaseParams.resize(NUM_SAMPLES);
+    outputParams.resize(NUM_SAMPLES);
     
+    // Get parameter pointers
     for (int i = 0; i < NUM_SAMPLES; ++i)
     {
         volumeParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("volume_" + juce::String(i)));
@@ -216,15 +233,17 @@ void ParameterManager::initializeParameters()
         decayParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("decay_" + juce::String(i)));
         sustainParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("sustain_" + juce::String(i)));
         releaseParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("release_" + juce::String(i)));
+        outputParams[i] = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("output_" + juce::String(i)));
     }
     
+    // Get global parameter pointers
     intervalTypeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("intervalType"));
     intervalValueParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("intervalValue"));
-    
     musicalScaleParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("musicalScale"));
     rootNoteParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rootNote"));
     maxTimingDelayParam = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("maxTimingDelay"));
     
+    // Get section iteration parameter pointers
     for (int i = 0; i < 4; ++i)
     {
         sectionBarsParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("section_bars_" + juce::String(i)));
@@ -238,6 +257,7 @@ juce::AudioParameterFloat* ParameterManager::getVolumeParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return volumeParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -245,6 +265,7 @@ juce::AudioParameterFloat* ParameterManager::getPanParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return panParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -252,6 +273,7 @@ juce::AudioParameterBool* ParameterManager::getMuteParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return muteParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -259,6 +281,7 @@ juce::AudioParameterInt* ParameterManager::getMidiNoteParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return midiNoteParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -266,6 +289,7 @@ juce::AudioParameterInt* ParameterManager::getPolyphonyParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return polyphonyParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -273,6 +297,7 @@ juce::AudioParameterBool* ParameterManager::getVelocityModeParam(int sampleIndex
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return velocityModeParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -280,6 +305,7 @@ juce::AudioParameterBool* ParameterManager::getMidiPitchParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return midiPitchParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -287,6 +313,7 @@ juce::AudioParameterBool* ParameterManager::getRowPitchParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return rowPitchParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -294,6 +321,7 @@ juce::AudioParameterBool* ParameterManager::getTimingModeParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return timingModeParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -301,6 +329,7 @@ juce::AudioParameterBool* ParameterManager::getLegatoParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return legatoParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -308,6 +337,7 @@ juce::AudioParameterFloat* ParameterManager::getAttackParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return attackParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -315,6 +345,7 @@ juce::AudioParameterFloat* ParameterManager::getDecayParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return decayParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -322,6 +353,7 @@ juce::AudioParameterFloat* ParameterManager::getSustainParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return sustainParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -329,6 +361,15 @@ juce::AudioParameterFloat* ParameterManager::getReleaseParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
         return releaseParams[sampleIndex];
+        
+    return nullptr;
+}
+
+juce::AudioParameterChoice* ParameterManager::getOutputParam(int sampleIndex)
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return outputParams[sampleIndex];
+        
     return nullptr;
 }
 
@@ -361,6 +402,7 @@ juce::AudioParameterInt* ParameterManager::getSectionBarsParam(int sectionIndex)
 {
     if (sectionIndex >= 0 && sectionIndex < 4)
         return sectionBarsParams[sectionIndex];
+        
     return nullptr;
 }
 
@@ -368,6 +410,7 @@ juce::AudioParameterInt* ParameterManager::getSectionGridStateParam(int sectionI
 {
     if (sectionIndex >= 0 && sectionIndex < 4)
         return sectionGridStateParams[sectionIndex];
+        
     return nullptr;
 }
 
@@ -375,6 +418,7 @@ juce::AudioParameterBool* ParameterManager::getSectionRandomizeParam(int section
 {
     if (sectionIndex >= 0 && sectionIndex < 4)
         return sectionRandomizeParams[sectionIndex];
+        
     return nullptr;
 }
 
@@ -382,6 +426,7 @@ juce::AudioParameterFloat* ParameterManager::getSectionDensityParam(int sectionI
 {
     if (sectionIndex >= 0 && sectionIndex < 4)
         return sectionDensityParams[sectionIndex];
+        
     return nullptr;
 }
 
@@ -392,59 +437,51 @@ MusicalScale ParameterManager::getSelectedScale() const
         return static_cast<MusicalScale>(musicalScaleParam->getIndex());
     }
     
-    return MusicalScale::Major; // Default to Major scale
+    return MusicalScale::Pentatonic; // Default to pentatonic
 }
 
 int ParameterManager::getSampleForColumn(int column) const
 {
     // Direct 1:1 mapping between columns and samples
-    if (column >= 0 && column < GRID_SIZE)
-    {
-        return column; // Each column maps directly to the same-indexed sample
-    }
-    
+    if (column >= 0 && column < NUM_SAMPLES)
+        return column;
+        
     return -1; // Invalid column
 }
 
 ColumnControlMode ParameterManager::getControlModeForColumn(int column) const
 {
-    // Now each column directly maps to a sample
-    if (column >= 0 && column < NUM_SAMPLES)
-    {
-        return getControlModeForSample(column);
-    }
+    // Get the sample index for this column
+    int sampleIndex = getSampleForColumn(column);
     
-    // Default to velocity control
-    return ColumnControlMode::Velocity;
+    // If the column is valid, get the control mode for the sample
+    if (sampleIndex >= 0)
+        return getControlModeForSample(sampleIndex);
+        
+    return ColumnControlMode::None;
 }
 
 ColumnControlMode ParameterManager::getControlModeForSample(int sampleIndex) const
 {
-    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && velocityModeParams[sampleIndex] != nullptr && timingModeParams[sampleIndex] != nullptr)
+    ColumnControlMode mode = ColumnControlMode::None;
+    
+    // Check if the sample index is valid
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
     {
-        bool velocityEnabled = velocityModeParams[sampleIndex]->get();
-        bool timingEnabled = timingModeParams[sampleIndex]->get();
+        // Check if velocity mode is enabled
+        if (velocityModeParams[sampleIndex] != nullptr && velocityModeParams[sampleIndex]->get())
+        {
+            mode = static_cast<ColumnControlMode>(static_cast<int>(mode) | static_cast<int>(ColumnControlMode::Velocity));
+        }
         
-        if (velocityEnabled && timingEnabled)
+        // Check if timing mode is enabled
+        if (timingModeParams[sampleIndex] != nullptr && timingModeParams[sampleIndex]->get())
         {
-            return ColumnControlMode::Both;
-        }
-        else if (velocityEnabled)
-        {
-            return ColumnControlMode::Velocity;
-        }
-        else if (timingEnabled)
-        {
-            return ColumnControlMode::Timing;
-        }
-        else
-        {
-            return ColumnControlMode::None;
+            mode = static_cast<ColumnControlMode>(static_cast<int>(mode) | static_cast<int>(ColumnControlMode::Timing));
         }
     }
     
-    // Default to velocity control
-    return ColumnControlMode::Velocity;
+    return mode;
 }
 
 bool ParameterManager::getLegatoForSample(int sampleIndex) const
@@ -454,8 +491,7 @@ bool ParameterManager::getLegatoForSample(int sampleIndex) const
         return legatoParams[sampleIndex]->get();
     }
     
-    // Default to true (legato mode enabled)
-    return true;
+    return true; // Default to true
 }
 
 float ParameterManager::getVolumeForSample(int sampleIndex) const
@@ -465,8 +501,7 @@ float ParameterManager::getVolumeForSample(int sampleIndex) const
         return volumeParams[sampleIndex]->get();
     }
     
-    // Default to 0.8 (80% volume)
-    return 0.8f;
+    return 0.8f; // Default volume
 }
 
 float ParameterManager::getPanForSample(int sampleIndex) const
@@ -476,8 +511,7 @@ float ParameterManager::getPanForSample(int sampleIndex) const
         return panParams[sampleIndex]->get();
     }
     
-    // Default to 0.0 (center)
-    return 0.0f;
+    return 0.0f; // Default pan (center)
 }
 
 bool ParameterManager::getMuteForSample(int sampleIndex) const
@@ -487,8 +521,7 @@ bool ParameterManager::getMuteForSample(int sampleIndex) const
         return muteParams[sampleIndex]->get();
     }
     
-    // Default to false (not muted)
-    return false;
+    return false; // Default to not muted
 }
 
 int ParameterManager::getMidiNoteForSample(int sampleIndex) const
@@ -498,8 +531,7 @@ int ParameterManager::getMidiNoteForSample(int sampleIndex) const
         return midiNoteParams[sampleIndex]->get();
     }
     
-    // Default to 60 (middle C)
-    return 60;
+    return 60; // Default to middle C
 }
 
 int ParameterManager::getPolyphonyForSample(int sampleIndex) const
@@ -509,8 +541,7 @@ int ParameterManager::getPolyphonyForSample(int sampleIndex) const
         return polyphonyParams[sampleIndex]->get();
     }
     
-    // Default to 4 voices
-    return 4;
+    return 4; // Default to 4 voices
 }
 
 float ParameterManager::getAttackForSample(int sampleIndex) const
@@ -520,8 +551,7 @@ float ParameterManager::getAttackForSample(int sampleIndex) const
         return attackParams[sampleIndex]->get();
     }
     
-    // Default attack
-    return 10.0f;
+    return 10.0f; // Default attack time
 }
 
 float ParameterManager::getDecayForSample(int sampleIndex) const
@@ -531,8 +561,7 @@ float ParameterManager::getDecayForSample(int sampleIndex) const
         return decayParams[sampleIndex]->get();
     }
     
-    // Default decay
-    return 100.0f;
+    return 100.0f; // Default decay time
 }
 
 float ParameterManager::getSustainForSample(int sampleIndex) const
@@ -542,8 +571,7 @@ float ParameterManager::getSustainForSample(int sampleIndex) const
         return sustainParams[sampleIndex]->get();
     }
     
-    // Default sustain
-    return 0.7f;
+    return 0.7f; // Default sustain level
 }
 
 float ParameterManager::getReleaseForSample(int sampleIndex) const
@@ -553,39 +581,55 @@ float ParameterManager::getReleaseForSample(int sampleIndex) const
         return releaseParams[sampleIndex]->get();
     }
     
-    // Default release time
-    return 200.0f;
+    return 200.0f; // Default release time
+}
+
+int ParameterManager::getOutputForSample(int sampleIndex) const
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && outputParams[sampleIndex] != nullptr)
+    {
+        return outputParams[sampleIndex]->getIndex();
+    }
+    
+    return 0; // Default to main output
 }
 
 int ParameterManager::getPitchOffsetForRow(int row) const
 {
-    if (row < 0 || row >= GRID_SIZE)
-        return 0;
-        
-    // Get the current scale
-    MusicalScale currentScale = static_cast<MusicalScale>(musicalScaleParam->getIndex());
+    // Invert row index (0 is top row in the grid, but we want the bottom row to be the lowest pitch)
+    int invertedRow = GRID_SIZE - 1 - row;
     
-    // Get the scale pattern for the current scale
-    const std::vector<int>& pattern = getScalePattern(currentScale);
+    // Get the selected scale
+    MusicalScale scale = getSelectedScale();
     
-    // Calculate the octave and step within the octave
-    int octave = row / pattern.size();
-    int step = row % pattern.size();
+    // Get the scale pattern
+    const std::vector<int>& scalePattern = getScalePattern(scale);
     
     // Calculate the pitch offset
-    // Each row moves up in the scale, with octave jumps as needed
-    return octave * 12 + pattern[step];
+    int octave = invertedRow / scalePattern.size();
+    int noteInScale = invertedRow % scalePattern.size();
+    
+    // For chromatic scale, just return the row index
+    if (scale == MusicalScale::Chromatic)
+    {
+        return invertedRow - 7; // Center around middle row
+    }
+    
+    // For other scales, map to the scale pattern
+    return (octave * 12) + scalePattern[noteInScale] - 7; // Center around middle row
 }
 
 float ParameterManager::getTimingDelayForRow(int row) const
 {
-    if (row < 0 || row >= GRID_SIZE)
-        return 0.0f;
-        
-    // Calculate delay from 0ms to maxTimingDelay based on row position
-    // Each row represents an equal increment
-    const float MAX_DELAY_MS = maxTimingDelayParam->get();
-    return (static_cast<float>(row) / static_cast<float>(GRID_SIZE - 1)) * MAX_DELAY_MS;
+    // Get the maximum timing delay
+    float maxDelay = maxTimingDelayParam != nullptr ? maxTimingDelayParam->get() : 160.0f;
+    
+    // Calculate the delay based on the row (0 is top row, GRID_SIZE-1 is bottom row)
+    // Map row to a value between 0 and 1
+    float normalizedRow = static_cast<float>(row) / static_cast<float>(GRID_SIZE - 1);
+    
+    // Map to delay (0 to maxDelay)
+    return normalizedRow * maxDelay;
 }
 
 const std::vector<int>& ParameterManager::getScalePattern(MusicalScale scale) const
@@ -598,7 +642,7 @@ const std::vector<int>& ParameterManager::getScalePattern(MusicalScale scale) co
     static const std::vector<int> pentatonicScale = { 0, 2, 4, 7, 9 };
     static const std::vector<int> bluesScale = { 0, 3, 5, 6, 7, 10 };
     
-    // Return the appropriate scale pattern based on the selected scale
+    // Return the appropriate scale pattern
     switch (scale)
     {
         case MusicalScale::Major:
@@ -614,6 +658,6 @@ const std::vector<int>& ParameterManager::getScalePattern(MusicalScale scale) co
         case MusicalScale::Blues:
             return bluesScale;
         default:
-            return majorScale; // Default to major scale
+            return pentatonicScale; // Default to pentatonic
     }
 }

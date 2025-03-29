@@ -1,6 +1,6 @@
 # Synth of Life
 
-A creative VST3 audio generator plugin that combines Conway's Game of Life with sample playback and MIDI-controlled synthesis. The plugin creates evolving, generative audio patterns based on cellular automata rules, providing a unique and interactive sound design tool for musical exploration.
+A creative VST3/AU audio generator plugin that combines Conway's Game of Life with sample playback and MIDI-controlled synthesis. The plugin creates evolving, generative audio patterns based on cellular automata rules, providing a unique and interactive sound design tool for musical exploration.
 
 ## Features
 
@@ -14,12 +14,30 @@ A creative VST3 audio generator plugin that combines Conway's Game of Life with 
 - Position-based pitch shifting for melodic patterns
 - Musical scale-aware pitch mapping for harmonious output
 - Independent ADSR envelopes for each voice
+- Multiple output bus routing for flexible signal processing
 - True polyphony with proper voice management
 - Visual note activity indicator
 - Waveform display for audio output visualization
-- Available as VST3 and Standalone application
+- Available as VST3, AU (Mac), and Standalone application
 
 ## Changelog
+
+### Version 1.6.0 (March 29, 2025)
+
+#### Output Bus Selection
+- **Multiple Output Routing**: Added support for routing samples to different output buses
+- **Per-Sample Output Selection**: Each sample can be independently routed to any of 16 additional outputs
+- **Flexible Signal Flow**: Enables advanced routing options for external processing in the host DAW
+- **Default Main Output**: Samples default to the main stereo output for backward compatibility
+
+#### Cross-Platform Enhancements
+- **Mac Support**: Added Audio Unit (AU) plugin format for macOS compatibility
+- **Self-Contained Build System**: Automatic JUCE repository cloning for easier project setup
+- **Improved Build Process**: Enhanced CMake configuration for cross-platform builds
+
+#### UI Improvements
+- **Expanded Interface**: Increased UI height to accommodate new output selection controls
+- **Optimized Layout**: Ensured all controls remain accessible with the addition of output routing
 
 ### Version 1.5.1 (March 29, 2025)
 

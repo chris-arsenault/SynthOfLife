@@ -14,7 +14,24 @@ DrumMachineAudioProcessor::DrumMachineAudioProcessor()
                       #if ! JucePlugin_IsSynth
                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                       #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Main Output", juce::AudioChannelSet::stereo(), true)
+                       // Add additional output buses
+                       .withOutput ("Output 1", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 2", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 3", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 4", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 5", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 6", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 7", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 8", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 9", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 10", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 11", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 12", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 13", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 14", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 15", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output 16", juce::AudioChannelSet::stereo(), true)
                      #endif
                        )
 #endif
@@ -22,6 +39,9 @@ DrumMachineAudioProcessor::DrumMachineAudioProcessor()
     // Initialize debug logging
     DebugLogger::initialize();
     DebugLogger::log("DrumMachineAudioProcessor initialized");
+    
+    // Log the number of output buses
+    DebugLogger::log("Number of output buses: " + std::to_string(getBusCount(false)));
     
     // Create parameter manager
     parameterManager = std::make_unique<ParameterManager>(*this);
@@ -173,6 +193,18 @@ bool DrumMachineAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
         return false;
    #endif
 
+    // Check that we have the correct number of output buses
+    if (layouts.outputBuses.size() < TOTAL_OUTPUT_BUSES)
+        return false;
+
+    // Check that all output buses are either mono or stereo
+    for (int i = 0; i < layouts.outputBuses.size(); ++i)
+    {
+        if (layouts.getChannelSet(false, i) != juce::AudioChannelSet::mono() &&
+            layouts.getChannelSet(false, i) != juce::AudioChannelSet::stereo())
+            return false;
+    }
+
     return true;
   #endif
 }
@@ -283,33 +315,80 @@ void DrumMachineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         float release = parameterManager->getReleaseForSample(i);
         
         drumPads[i].setEnvelopeParameters(attack, decay, sustain, release);
+        
+        // Update output bus selection
+        auto* outputParam = parameterManager->getOutputParam(i);
+        if (outputParam != nullptr)
+        {
+            int outputBus = outputParam->getIndex();
+            drumPads[i].setOutputBus(outputBus);
+        }
     }
     
-    // Clear the output buffer
-    buffer.clear();
+    // Get the number of output buses
+    int numOutputBuses = getBusCount(false);
     
-    // Render audio for each drum pad
+    // Create temporary buffers for each output bus
+    std::vector<juce::AudioBuffer<float>> busBuffers;
+    for (int busIdx = 0; busIdx < numOutputBuses; ++busIdx)
+    {
+        auto* outputBus = getBus(false, busIdx);
+        if (outputBus != nullptr && outputBus->isEnabled())
+        {
+            int numChannels = outputBus->getNumberOfChannels();
+            busBuffers.emplace_back(numChannels, buffer.getNumSamples());
+            busBuffers.back().clear();
+        }
+        else
+        {
+            // Add a dummy buffer for disabled buses
+            busBuffers.emplace_back(2, buffer.getNumSamples());
+            busBuffers.back().clear();
+        }
+    }
+    
+    // Process each drum pad and route to the appropriate output bus
     for (int i = 0; i < ParameterManager::NUM_SAMPLES; ++i)
     {
         // Skip muted samples
         if (parameterManager->getMuteForSample(i))
             continue;
-            
-        // Get temporary buffer for this drum pad
-        juce::AudioBuffer<float> tempBuffer(buffer.getNumChannels(), buffer.getNumSamples());
-        tempBuffer.clear();
         
-        // Render audio for this drum pad
-        drumPads[i].renderNextBlock(tempBuffer, 0, tempBuffer.getNumSamples());
+        // Get the output bus for this drum pad
+        int outputBus = drumPads[i].getOutputBus();
         
-        // Add to main buffer
-        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+        // Ensure the output bus is valid
+        if (outputBus >= 0 && outputBus < busBuffers.size())
         {
-            buffer.addFrom(channel, 0, tempBuffer, channel, 0, tempBuffer.getNumSamples());
+            // Render audio for this drum pad to the appropriate bus buffer
+            drumPads[i].renderNextBlockToBus(busBuffers[outputBus], 0, buffer.getNumSamples(), outputBus);
         }
     }
     
-    // Copy audio data to visualization buffer
+    // Clear the main output buffer
+    buffer.clear();
+    
+    // Copy the bus buffers to the appropriate output buses
+    for (int busIdx = 0; busIdx < numOutputBuses && busIdx < busBuffers.size(); ++busIdx)
+    {
+        auto* outputBus = getBus(false, busIdx);
+        if (outputBus != nullptr && outputBus->isEnabled())
+        {
+            // Get the channel offset for this bus in the main buffer
+            int channelOffset = getChannelIndexInProcessBlockBuffer(false, busIdx, 0);
+            int numChannels = outputBus->getNumberOfChannels();
+            
+            // Copy the bus buffer to the main buffer
+            for (int channel = 0; channel < numChannels; ++channel)
+            {
+                buffer.addFrom(channelOffset + channel, 0, 
+                               busBuffers[busIdx], channel, 0, 
+                               buffer.getNumSamples());
+            }
+        }
+    }
+    
+    // Copy audio data to visualization buffer (from the main output bus)
     if (visualizationBuffer.getNumSamples() != buffer.getNumSamples())
     {
         visualizationBuffer.setSize(1, buffer.getNumSamples(), false, true, true);

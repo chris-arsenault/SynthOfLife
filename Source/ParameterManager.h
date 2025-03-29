@@ -49,6 +49,7 @@ class ParameterManager
 public:
     static const int NUM_SAMPLES = 16; 
     static const int GRID_SIZE = 16;
+    static const int NUM_OUTPUTS = 17; // Main output (0) + 16 additional outputs (1-16)
     
     ParameterManager(juce::AudioProcessor& processor);
     ~ParameterManager();
@@ -74,6 +75,7 @@ public:
     juce::AudioParameterFloat* getDecayParam(int sampleIndex);
     juce::AudioParameterFloat* getSustainParam(int sampleIndex);
     juce::AudioParameterFloat* getReleaseParam(int sampleIndex);
+    juce::AudioParameterChoice* getOutputParam(int sampleIndex);
     
     juce::AudioParameterChoice* getIntervalTypeParam();
     juce::AudioParameterChoice* getIntervalValueParam();
@@ -126,6 +128,9 @@ public:
     // Get release for a specific sample
     float getReleaseForSample(int sampleIndex) const;
     
+    // Get output bus for a specific sample
+    int getOutputForSample(int sampleIndex) const;
+    
     // Get the selected musical scale
     MusicalScale getSelectedScale() const;
     
@@ -165,6 +170,7 @@ private:
     std::vector<juce::AudioParameterFloat*> decayParams;
     std::vector<juce::AudioParameterFloat*> sustainParams;
     std::vector<juce::AudioParameterFloat*> releaseParams;
+    std::vector<juce::AudioParameterChoice*> outputParams;
     
     juce::AudioParameterChoice* intervalTypeParam = nullptr;
     juce::AudioParameterChoice* intervalValueParam = nullptr;

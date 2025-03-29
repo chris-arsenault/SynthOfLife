@@ -130,6 +130,11 @@ public:
     enum class IntervalType { Normal, Dotted, Triplet };
     enum class IntervalValue { Quarter, Eighth, Sixteenth };
 
+    // Output bus constants
+    static constexpr int MAIN_OUTPUT_BUS = 0;
+    static constexpr int NUM_ADDITIONAL_OUTPUTS = 16;
+    static constexpr int TOTAL_OUTPUT_BUSES = 17; // Main output + 16 additional outputs
+
 private:
     // Constants
     static constexpr int MIDDLE_C = 60; // MIDI note number for middle C

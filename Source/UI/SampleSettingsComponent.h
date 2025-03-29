@@ -63,6 +63,7 @@ private:
         juce::TextButton loadButton;
         juce::Label filenameLabel;
         juce::ToggleButton legatoButton;
+        juce::ComboBox outputSelector;         // New dropdown for output selection
         ADSRComponent adsrComponent;
         
         // Parameter attachments
@@ -76,6 +77,7 @@ private:
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> rowPitchAttachment;     // New attachment for row-based pitch control
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> timingModeAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> legatoAttachment;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> outputAttachment;     // New attachment for output selection
         
         // Delete copy constructor and assignment operator
         SampleControls() = default;
