@@ -56,7 +56,8 @@ private:
         juce::ToggleButton muteButton;
         juce::Slider midiNoteSlider;
         juce::Slider polyphonySlider;
-        juce::ComboBox controlModeBox;
+        juce::ToggleButton velocityModeButton;
+        juce::ToggleButton pitchModeButton;
         juce::TextButton loadButton;
         juce::Label filenameLabel;
         juce::ToggleButton legatoButton;
@@ -68,7 +69,8 @@ private:
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> muteAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> midiNoteAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> polyphonyAttachment;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> controlModeAttachment;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> velocityModeAttachment;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> pitchModeAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> legatoAttachment;
         
         // Delete copy constructor and assignment operator

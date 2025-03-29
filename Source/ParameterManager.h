@@ -23,12 +23,13 @@ enum class IntervalValue
     NumIntervalValues
 };
 
-// Column control modes
+// Column control modes - now using bit flags for multiple selections
 enum class ColumnControlMode
 {
-    Velocity = 0,
-    Pitch,
-    NumControlModes
+    None = 0,
+    Velocity = 1,
+    Pitch = 2,
+    Both = Velocity | Pitch
 };
 
 // Musical scales
@@ -64,7 +65,8 @@ public:
     juce::AudioParameterBool* getMuteParam(int sampleIndex);
     juce::AudioParameterInt* getMidiNoteParam(int sampleIndex);
     juce::AudioParameterInt* getPolyphonyParam(int sampleIndex);
-    juce::AudioParameterChoice* getControlModeParam(int sampleIndex);
+    juce::AudioParameterBool* getVelocityModeParam(int sampleIndex);
+    juce::AudioParameterBool* getPitchModeParam(int sampleIndex);
     juce::AudioParameterBool* getLegatoParam(int sampleIndex);
     juce::AudioParameterFloat* getAttackParam(int sampleIndex);
     juce::AudioParameterFloat* getDecayParam(int sampleIndex);
@@ -145,7 +147,8 @@ private:
     std::vector<juce::AudioParameterBool*> muteParams;
     std::vector<juce::AudioParameterInt*> midiNoteParams;
     std::vector<juce::AudioParameterInt*> polyphonyParams;
-    std::vector<juce::AudioParameterChoice*> controlModeParams;
+    std::vector<juce::AudioParameterBool*> velocityModeParams;
+    std::vector<juce::AudioParameterBool*> pitchModeParams;
     std::vector<juce::AudioParameterBool*> legatoParams;
     std::vector<juce::AudioParameterFloat*> attackParams;
     std::vector<juce::AudioParameterFloat*> decayParams;

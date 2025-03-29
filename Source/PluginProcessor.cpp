@@ -365,36 +365,47 @@ void DrumMachineAudioProcessor::processGameOfLife()
             // Only process if not muted
             if (!parameterManager->getMuteForSample(sampleIndex))
             {
-                // Calculate velocity based on position
-                float velocity = 0.5f + (static_cast<float>(row) / static_cast<float>(ParameterManager::GRID_SIZE)) * 0.5f;
-                
                 // Check column control mode
                 ColumnControlMode controlMode = parameterManager->getControlModeForColumn(column);
                 
                 // Get current cell state
                 bool currentState = gameOfLife->getCellState(i, j);
                 
+                // Calculate velocity based on position
+                float velocity = 0.5f + (static_cast<float>(row) / static_cast<float>(ParameterManager::GRID_SIZE)) * 0.5f;
+                
+                // Calculate pitch shift if needed
+                int totalPitchShift = 0;
+                if (controlMode == ColumnControlMode::Pitch || controlMode == ColumnControlMode::Both)
+                {
+                    // Calculate pitch shift based on MIDI note and row position
+                    int basePitchShift = mostRecentMidiNote - MIDDLE_C;
+                    
+                    // Add row-based pitch offset using the selected scale
+                    int rowPitchOffset = parameterManager->getPitchOffsetForRow(row);
+                    
+                    // Combine the base pitch shift with the row-based offset
+                    totalPitchShift = basePitchShift + rowPitchOffset;
+                }
+                
+                // If velocity mode is not active, use a fixed velocity
+                if (controlMode != ColumnControlMode::Velocity && controlMode != ColumnControlMode::Both)
+                {
+                    velocity = 0.8f; // Use a fixed velocity when not in velocity mode
+                }
+                
                 // Check if cell just activated (went from off to on)
                 if (gameOfLife->cellJustActivated(i, j))
                 {
                     // Cell just turned on - trigger sample from beginning
-                    if (controlMode == ColumnControlMode::Pitch)
+                    if (controlMode == ColumnControlMode::Pitch || controlMode == ColumnControlMode::Both)
                     {
-                        // Calculate pitch shift based on MIDI note and row position
-                        int basePitchShift = mostRecentMidiNote - MIDDLE_C;
-                        
-                        // Add row-based pitch offset using the selected scale
-                        int rowPitchOffset = parameterManager->getPitchOffsetForRow(row);
-                        
-                        // Combine the base pitch shift with the row-based offset
-                        int totalPitchShift = basePitchShift + rowPitchOffset;
-                        
                         // Trigger with pitch shift for this specific cell
                         drumPads[sampleIndex].triggerSampleWithPitchForCell(velocity, totalPitchShift, i, j);
                     }
                     else
                     {
-                        // Default behavior (velocity control) for this specific cell
+                        // Default behavior (velocity control only) for this specific cell
                         drumPads[sampleIndex].triggerSampleForCell(velocity, i, j);
                     }
                 }
@@ -407,23 +418,14 @@ void DrumMachineAudioProcessor::processGameOfLife()
                     if (!isLegato)
                     {
                         // Not legato - retrigger sample from beginning
-                        if (controlMode == ColumnControlMode::Pitch)
+                        if (controlMode == ColumnControlMode::Pitch || controlMode == ColumnControlMode::Both)
                         {
-                            // Calculate pitch shift based on MIDI note and row position
-                            int basePitchShift = mostRecentMidiNote - MIDDLE_C;
-                            
-                            // Add row-based pitch offset using the selected scale
-                            int rowPitchOffset = parameterManager->getPitchOffsetForRow(row);
-                            
-                            // Combine the base pitch shift with the row-based offset
-                            int totalPitchShift = basePitchShift + rowPitchOffset;
-                            
                             // Trigger with pitch shift for this specific cell
                             drumPads[sampleIndex].triggerSampleWithPitchForCell(velocity, totalPitchShift, i, j);
                         }
                         else
                         {
-                            // Default behavior (velocity control) for this specific cell
+                            // Default behavior (velocity control only) for this specific cell
                             drumPads[sampleIndex].triggerSampleForCell(velocity, i, j);
                         }
                     }

@@ -21,6 +21,19 @@ A creative VST3 audio generator plugin that combines Conway's Game of Life with 
 
 ## Changelog
 
+### Version 1.4.0 (March 29, 2025)
+
+#### Column Control Enhancements
+- **Combined Modulation Modes**: Replaced the exclusive velocity/pitch control toggle with independent checkboxes
+- **Dual Modulation**: Each column can now use both velocity and pitch modulation simultaneously
+- **Flexible Configuration**: Users can enable velocity mode, pitch mode, both, or neither for each column
+- **Improved Sound Design**: More expressive control over how row position affects the generated sound
+
+#### Technical Improvements
+- Refactored control mode system to use bit flags for multiple simultaneous modes
+- Updated UI to use checkboxes instead of a combobox for more intuitive control
+- Enhanced audio processing to apply both modulations when enabled
+
 ### Version 1.3.0 (March 29, 2025)
 
 #### Section Controls Enhancements

@@ -60,11 +60,15 @@ SampleSettingsComponent::SampleSettingsComponent(ParameterManager& pm, int start
         controls->polyphonySlider.setValue(4, juce::dontSendNotification); // Default to 4 voices
         addAndMakeVisible(controls->polyphonySlider);
         
-        // Set up control mode combobox
-        controls->controlModeBox.addItem("Velocity", 1);
-        controls->controlModeBox.addItem("Pitch", 2);
-        controls->controlModeBox.setSelectedId(1, juce::dontSendNotification);
-        addAndMakeVisible(controls->controlModeBox);
+        // Set up velocity mode button
+        controls->velocityModeButton.setButtonText("Velocity Mode");
+        controls->velocityModeButton.setToggleState(true, juce::dontSendNotification); // Default to enabled
+        addAndMakeVisible(controls->velocityModeButton);
+        
+        // Set up pitch mode button
+        controls->pitchModeButton.setButtonText("Pitch Mode");
+        controls->pitchModeButton.setToggleState(false, juce::dontSendNotification); // Default to disabled
+        addAndMakeVisible(controls->pitchModeButton);
         
         // Set up mute button
         controls->muteButton.setButtonText("Mute");
@@ -100,8 +104,11 @@ SampleSettingsComponent::SampleSettingsComponent(ParameterManager& pm, int start
         controls->polyphonyAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
             apvts, "polyphony_" + juce::String(sampleIndex), controls->polyphonySlider);
             
-        controls->controlModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-            apvts, "control_mode_" + juce::String(sampleIndex), controls->controlModeBox);
+        controls->velocityModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            apvts, "velocity_mode_" + juce::String(sampleIndex), controls->velocityModeButton);
+            
+        controls->pitchModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            apvts, "pitch_mode_" + juce::String(sampleIndex), controls->pitchModeButton);
             
         controls->legatoAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             apvts, "legato_" + juce::String(sampleIndex), controls->legatoButton);
@@ -176,8 +183,12 @@ void SampleSettingsComponent::resized()
         controls->polyphonySlider.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
         controlY += controlHeight + controlSpacing;
         
-        // Control mode combobox
-        controls->controlModeBox.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
+        // Velocity mode button
+        controls->velocityModeButton.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
+        controlY += controlHeight + controlSpacing;
+        
+        // Pitch mode button
+        controls->pitchModeButton.setBounds(x + margin, controlY, sampleWidth - 2 * margin, controlHeight);
         controlY += controlHeight + controlSpacing;
         
         // Mute button

@@ -52,16 +52,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
             "Sample " + juce::String(i + 1) + " Polyphony",
             1, 16, 4)); // Default to 4 voices
             
-        // Control mode parameter
-        juce::StringArray controlModes;
-        controlModes.add("Velocity");
-        controlModes.add("Pitch");
-        
-        layout.add(std::make_unique<juce::AudioParameterChoice>(
-            "control_mode_" + juce::String(i),
-            "Sample " + juce::String(i + 1) + " Control Mode",
-            controlModes,
-            0));
+        // Control mode parameters - now using separate boolean parameters for each mode
+        layout.add(std::make_unique<juce::AudioParameterBool>(
+            "velocity_mode_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Velocity Mode",
+            true)); // Default to velocity mode enabled
+            
+        layout.add(std::make_unique<juce::AudioParameterBool>(
+            "pitch_mode_" + juce::String(i),
+            "Sample " + juce::String(i + 1) + " Pitch Mode",
+            false)); // Default to pitch mode disabled
             
         // Legato mode parameter
         layout.add(std::make_unique<juce::AudioParameterBool>(
@@ -174,7 +174,8 @@ void ParameterManager::initializeParameters()
     muteParams.resize(NUM_SAMPLES);
     midiNoteParams.resize(NUM_SAMPLES);
     polyphonyParams.resize(NUM_SAMPLES);
-    controlModeParams.resize(NUM_SAMPLES);
+    velocityModeParams.resize(NUM_SAMPLES);
+    pitchModeParams.resize(NUM_SAMPLES);
     legatoParams.resize(NUM_SAMPLES);
     attackParams.resize(NUM_SAMPLES);
     decayParams.resize(NUM_SAMPLES);
@@ -188,7 +189,8 @@ void ParameterManager::initializeParameters()
         muteParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("mute_" + juce::String(i)));
         midiNoteParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midi_note_" + juce::String(i)));
         polyphonyParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("polyphony_" + juce::String(i)));
-        controlModeParams[i] = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("control_mode_" + juce::String(i)));
+        velocityModeParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("velocity_mode_" + juce::String(i)));
+        pitchModeParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("pitch_mode_" + juce::String(i)));
         legatoParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("legato_" + juce::String(i)));
         attackParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("attack_" + juce::String(i)));
         decayParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("decay_" + juce::String(i)));
@@ -246,10 +248,17 @@ juce::AudioParameterInt* ParameterManager::getPolyphonyParam(int sampleIndex)
     return nullptr;
 }
 
-juce::AudioParameterChoice* ParameterManager::getControlModeParam(int sampleIndex)
+juce::AudioParameterBool* ParameterManager::getVelocityModeParam(int sampleIndex)
 {
     if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
-        return controlModeParams[sampleIndex];
+        return velocityModeParams[sampleIndex];
+    return nullptr;
+}
+
+juce::AudioParameterBool* ParameterManager::getPitchModeParam(int sampleIndex)
+{
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES)
+        return pitchModeParams[sampleIndex];
     return nullptr;
 }
 
@@ -371,9 +380,27 @@ ColumnControlMode ParameterManager::getControlModeForColumn(int column) const
 
 ColumnControlMode ParameterManager::getControlModeForSample(int sampleIndex) const
 {
-    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && controlModeParams[sampleIndex] != nullptr)
+    if (sampleIndex >= 0 && sampleIndex < NUM_SAMPLES && velocityModeParams[sampleIndex] != nullptr && pitchModeParams[sampleIndex] != nullptr)
     {
-        return static_cast<ColumnControlMode>(controlModeParams[sampleIndex]->getIndex());
+        bool velocityEnabled = velocityModeParams[sampleIndex]->get();
+        bool pitchEnabled = pitchModeParams[sampleIndex]->get();
+        
+        if (velocityEnabled && pitchEnabled)
+        {
+            return ColumnControlMode::Both;
+        }
+        else if (velocityEnabled)
+        {
+            return ColumnControlMode::Velocity;
+        }
+        else if (pitchEnabled)
+        {
+            return ColumnControlMode::Pitch;
+        }
+        else
+        {
+            return ColumnControlMode::None;
+        }
     }
     
     // Default to velocity control
