@@ -14,32 +14,33 @@ GameOfLifeComponent::GameOfLifeComponent(ParameterManager& pm)
     randomizeButton.addListener(this);
     addAndMakeVisible(randomizeButton);
     
-    // Initialize interval controls
-    intervalLabel.setText("Update Interval:", juce::dontSendNotification);
-    intervalLabel.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::bold));
-    addAndMakeVisible(intervalLabel);
+    // Initialize clear button
+    clearButton.setButtonText("Clear");
+    clearButton.addListener(this);
+    addAndMakeVisible(clearButton);
     
-    // Set up interval type combo box
-    intervalTypeBox.addItem("Normal", 1);
-    intervalTypeBox.addItem("Dotted", 2);
-    intervalTypeBox.addItem("Triplet", 3);
-    intervalTypeBox.setSelectedItemIndex(0);
-    intervalTypeBox.addListener(this);
-    addAndMakeVisible(intervalTypeBox);
+    // Initialize grid state text box and label
+    gridStateLabel.setText("Grid State:", juce::dontSendNotification);
+    gridStateLabel.setFont(juce::Font(juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::bold));
+    addAndMakeVisible(gridStateLabel);
     
-    // Set up interval value combo box
-    intervalValueBox.addItem("1/4 (Quarter)", 1);
-    intervalValueBox.addItem("1/8 (Eighth)", 2);
-    intervalValueBox.addItem("1/16 (Sixteenth)", 3);
-    intervalValueBox.setSelectedItemIndex(2);
-    intervalValueBox.addListener(this);
-    addAndMakeVisible(intervalValueBox);
+    gridStateTextBox.setMultiLine(false);
+    gridStateTextBox.setReturnKeyStartsNewLine(false);
+    gridStateTextBox.setReadOnly(false);
+    gridStateTextBox.setScrollbarsShown(true);
+    gridStateTextBox.setCaretVisible(true);
+    gridStateTextBox.setPopupMenuEnabled(true);
+    gridStateTextBox.setText("0");
+    gridStateTextBox.onReturnKey = [this]() {
+        setGridStateFromString(gridStateTextBox.getText());
+        return true;
+    };
+    gridStateTextBox.onFocusLost = [this]() {
+        setGridStateFromString(gridStateTextBox.getText());
+    };
+    addAndMakeVisible(gridStateTextBox);
     
-    // Create attachments for interval controls
-    intervalTypeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-        paramManager.getAPVTS(), "intervalType", intervalTypeBox);
-    intervalValueAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-        paramManager.getAPVTS(), "intervalValue", intervalValueBox);
+    // Interval controls have been moved to the main tab
     
     // Create parameter attachments
     randomizeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -118,23 +119,21 @@ void GameOfLifeComponent::resized()
     auto labelArea = area.removeFromTop(30);
     midiControlLabel.setBounds(labelArea);
     
-    // Position the randomize button
-    auto buttonArea = area.removeFromTop(30);
-    randomizeButton.setBounds(buttonArea.withWidth(120));
+    // Position the buttons and text box
+    auto controlsArea = area.removeFromTop(30);
     
-    // Position the interval controls
-    auto intervalArea = area.removeFromTop(30);
+    // Clear button on the left
+    clearButton.setBounds(controlsArea.removeFromLeft(120));
     
-    // Layout for interval label
-    auto intervalLabelArea = intervalArea.removeFromLeft(120);
-    intervalLabel.setBounds(intervalLabelArea);
+    // Randomize button in the middle
+    randomizeButton.setBounds(controlsArea.removeFromLeft(120));
     
-    // Layout for interval type combo box
-    auto intervalTypeArea = intervalArea;
-    intervalTypeBox.setBounds(intervalTypeArea.removeFromLeft(150));
+    // Grid state label and text box on the right
+    auto gridStateLabelArea = controlsArea.removeFromLeft(80);
+    gridStateLabel.setBounds(gridStateLabelArea);
+    gridStateTextBox.setBounds(controlsArea.removeFromLeft(200));
     
-    // Layout for interval value combo box
-    intervalValueBox.setBounds(intervalTypeArea.removeFromLeft(150));
+    // Interval controls have been moved to the main tab
     
     // Reserve space for the grid (rest of the component)
     // The grid will be drawn in the paint method
@@ -168,7 +167,30 @@ void GameOfLifeComponent::buttonClicked(juce::Button* button)
     {
         // Randomize the grid
         gameOfLife->initialize(true);
+        
+        // Update the grid state text box
+        gridStateTextBox.setText(getGridStateAsString(), false);
+        
         repaint();
+    }
+    else if (button == &clearButton)
+    {
+        // Clear the grid (initialize without randomizing)
+        if (gameOfLife != nullptr)
+        {
+            for (int x = 0; x < ParameterManager::GRID_SIZE; ++x)
+            {
+                for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
+                {
+                    gameOfLife->setCellState(x, y, false);
+                }
+            }
+            
+            // Update the grid state text box
+            gridStateTextBox.setText("0", false);
+            
+            repaint();
+        }
     }
 }
 
@@ -190,6 +212,12 @@ void GameOfLifeComponent::timerCallback()
         
     // Always repaint to update the UI
     repaint();
+    
+    // Update the grid state text box if the grid has changed
+    if (gameOfLife->hasUpdated())
+    {
+        gridStateTextBox.setText(getGridStateAsString(), false);
+    }
 }
 
 bool GameOfLifeComponent::getCellCoordinates(const juce::Point<int>& position, int& x, int& y)
@@ -273,4 +301,91 @@ void GameOfLifeComponent::drawCell(juce::Graphics& g, int x, int y, bool alive, 
     // Draw cell border
     g.setColour(juce::Colours::grey);
     g.drawRect(cellX, cellY, cellSize, cellSize, 1);
+}
+
+juce::String GameOfLifeComponent::getGridStateAsString() const
+{
+    if (gameOfLife == nullptr)
+        return "0";
+    
+    // Convert the grid state to a binary string
+    juce::String binaryString;
+    
+    for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
+    {
+        for (int x = 0; x < ParameterManager::GRID_SIZE; ++x)
+        {
+            binaryString += gameOfLife->getCellState(x, y) ? "1" : "0";
+        }
+    }
+    
+    // Convert binary string to a decimal integer string
+    juce::BigInteger bigInt;
+    bigInt.parseString(binaryString, 2);
+    
+    return bigInt.toString(10);
+}
+
+void GameOfLifeComponent::setGridStateFromString(const juce::String& stateString)
+{
+    if (gameOfLife == nullptr)
+        return;
+    
+    // Parse the string as a decimal integer
+    juce::BigInteger bigInt;
+    bigInt.parseString(stateString, 10);
+    
+    // Check if the parsed value is valid (non-zero or explicitly "0")
+    bool validNumber = (bigInt != 0) || stateString == "0";
+    
+    if (!validNumber)
+    {
+        // If invalid, reset to 0
+        gridStateTextBox.setText("0", false);
+        
+        // Clear the grid
+        for (int x = 0; x < ParameterManager::GRID_SIZE; ++x)
+        {
+            for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
+            {
+                gameOfLife->setCellState(x, y, false);
+            }
+        }
+        
+        repaint();
+        return;
+    }
+    
+    // Convert to binary string, padded to grid size
+    juce::String binaryString = bigInt.toString(2);
+    
+    // Pad with zeros to match grid size
+    int requiredLength = ParameterManager::GRID_SIZE * ParameterManager::GRID_SIZE;
+    while (binaryString.length() < requiredLength)
+    {
+        binaryString = "0" + binaryString;
+    }
+    
+    // If too long, truncate to grid size
+    if (binaryString.length() > requiredLength)
+    {
+        binaryString = binaryString.substring(binaryString.length() - requiredLength);
+    }
+    
+    // Set the grid state based on the binary string
+    int index = 0;
+    for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
+    {
+        for (int x = 0; x < ParameterManager::GRID_SIZE; ++x)
+        {
+            bool cellState = binaryString[index] == '1';
+            gameOfLife->setCellState(x, y, cellState);
+            index++;
+        }
+    }
+    
+    // Update the text box with the normalized value
+    gridStateTextBox.setText(getGridStateAsString(), false);
+    
+    repaint();
 }

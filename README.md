@@ -21,6 +21,21 @@ A creative VST3 audio generator plugin that combines Conway's Game of Life with 
 
 ## Changelog
 
+### Version 1.3.0 (March 29, 2025)
+
+#### Section Controls Enhancements
+- **Section Iteration Controls**: Added four independent sections with configurable duration in bars
+- **DAW Synchronization**: Sections now synchronize with the DAW playhead position and time signature
+- **Density Control**: Added density sliders for each section to control the randomization density
+- **Grid State Persistence**: Section settings (bars, grid state, randomize, density) are saved with the project
+- **Visual Feedback**: Active section is highlighted in green with remaining bars displayed
+
+#### Technical Improvements
+- Added parameter attachments for all section controls to ensure state persistence
+- Implemented time signature detection for proper DAW synchronization
+- Added density-based grid initialization for more control over random patterns
+- Enhanced UI with section controls on the main tab
+
 ### Version 1.2.0 (March 28, 2025)
 
 #### Musical Enhancements

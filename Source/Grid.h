@@ -17,6 +17,9 @@ public:
     // Initialize the grid
     void initialize(bool randomize = false);
     
+    // Initialize the grid with a specific density (0.0-1.0)
+    void initializeWithDensity(float density);
+    
     // Update the grid to the next generation
     void update();
     

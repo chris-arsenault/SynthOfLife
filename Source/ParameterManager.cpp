@@ -121,14 +121,66 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
         "musicalScale",
         "Musical Scale",
         scaleChoices,
-        0)); // Default to Major scale
+        4));  // Default to Pentatonic
+        
+    // Root note parameter
+    juce::StringArray noteNames;
+    for (int i = 0; i < 12; ++i)
+    {
+        noteNames.add(juce::MidiMessage::getMidiNoteName(60 + i, true, true, 4));
+    }
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        "rootNote",
+        "Root Note",
+        noteNames,
+        0));  // Default to C
+        
+    // Add section iteration parameters
+    for (int i = 0; i < 4; ++i)
+    {
+        // Section bars parameter
+        layout.add(std::make_unique<juce::AudioParameterInt>(
+            "section_bars_" + juce::String(i),
+            "Section " + juce::String(i + 1) + " Bars",
+            1, 16, 4));  // Range 1-16, default 4
+            
+        // Section grid state parameter
+        layout.add(std::make_unique<juce::AudioParameterInt>(
+            "section_grid_state_" + juce::String(i),
+            "Section " + juce::String(i + 1) + " Grid State",
+            0, INT_MAX, 0));  // Range 0-INT_MAX, default 0
+            
+        // Section randomize parameter
+        layout.add(std::make_unique<juce::AudioParameterBool>(
+            "section_randomize_" + juce::String(i),
+            "Section " + juce::String(i + 1) + " Randomize",
+            true));  // Default to true
+            
+        // Section density parameter
+        layout.add(std::make_unique<juce::AudioParameterFloat>(
+            "section_density_" + juce::String(i),
+            "Section " + juce::String(i + 1) + " Density",
+            0.1f, 0.9f, 0.5f));  // Range 0.1-0.9, default 0.5
+    }
     
     return layout;
 }
 
 void ParameterManager::initializeParameters()
 {
-    // Store parameter pointers for easy access
+    // Initialize parameter pointers
+    volumeParams.resize(NUM_SAMPLES);
+    panParams.resize(NUM_SAMPLES);
+    muteParams.resize(NUM_SAMPLES);
+    midiNoteParams.resize(NUM_SAMPLES);
+    polyphonyParams.resize(NUM_SAMPLES);
+    controlModeParams.resize(NUM_SAMPLES);
+    legatoParams.resize(NUM_SAMPLES);
+    attackParams.resize(NUM_SAMPLES);
+    decayParams.resize(NUM_SAMPLES);
+    sustainParams.resize(NUM_SAMPLES);
+    releaseParams.resize(NUM_SAMPLES);
+    
     for (int i = 0; i < NUM_SAMPLES; ++i)
     {
         volumeParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("volume_" + juce::String(i)));
@@ -148,6 +200,15 @@ void ParameterManager::initializeParameters()
     intervalValueParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("intervalValue"));
     
     musicalScaleParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("musicalScale"));
+    rootNoteParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rootNote"));
+    
+    for (int i = 0; i < 4; ++i)
+    {
+        sectionBarsParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("section_bars_" + juce::String(i)));
+        sectionGridStateParams[i] = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("section_grid_state_" + juce::String(i)));
+        sectionRandomizeParams[i] = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("section_randomize_" + juce::String(i)));
+        sectionDensityParams[i] = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("section_density_" + juce::String(i)));
+    }
 }
 
 juce::AudioParameterFloat* ParameterManager::getVolumeParam(int sampleIndex)
@@ -244,7 +305,35 @@ juce::AudioParameterChoice* ParameterManager::getScaleParam()
 
 juce::AudioParameterChoice* ParameterManager::getRootNoteParam()
 {
-    return nullptr; // This parameter doesn't exist yet, but we need the method
+    return rootNoteParam;
+}
+
+juce::AudioParameterInt* ParameterManager::getSectionBarsParam(int sectionIndex)
+{
+    if (sectionIndex >= 0 && sectionIndex < 4)
+        return sectionBarsParams[sectionIndex];
+    return nullptr;
+}
+
+juce::AudioParameterInt* ParameterManager::getSectionGridStateParam(int sectionIndex)
+{
+    if (sectionIndex >= 0 && sectionIndex < 4)
+        return sectionGridStateParams[sectionIndex];
+    return nullptr;
+}
+
+juce::AudioParameterBool* ParameterManager::getSectionRandomizeParam(int sectionIndex)
+{
+    if (sectionIndex >= 0 && sectionIndex < 4)
+        return sectionRandomizeParams[sectionIndex];
+    return nullptr;
+}
+
+juce::AudioParameterFloat* ParameterManager::getSectionDensityParam(int sectionIndex)
+{
+    if (sectionIndex >= 0 && sectionIndex < 4)
+        return sectionDensityParams[sectionIndex];
+    return nullptr;
 }
 
 MusicalScale ParameterManager::getSelectedScale() const

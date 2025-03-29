@@ -30,8 +30,20 @@ public:
     // Timer callback
     void timerCallback() override;
     
-    // Set the GameOfLife model
-    void setGameOfLife(GameOfLife* model) { gameOfLife = model; }
+    // Set the GameOfLife instance
+    void setGameOfLife(GameOfLife* newGameOfLife) { gameOfLife = newGameOfLife; }
+    
+    // Get the GameOfLife instance
+    GameOfLife* getGameOfLife() const { return gameOfLife; }
+    
+    // Update UI elements
+    void updateUI() { repaint(); }
+    
+    // Get the grid state as a string (make it public so it can be accessed from PluginEditor)
+    juce::String getGridStateAsString() const;
+    
+    // Set grid state from string representation (make it public so it can be accessed from PluginEditor)
+    void setGridStateFromString(const juce::String& stateString);
     
     // Update the grid display
     void updateGrid() { repaint(); }
@@ -42,15 +54,11 @@ private:
     
     juce::Label midiControlLabel;
     juce::TextButton randomizeButton;
+    juce::TextButton clearButton;
+    juce::TextEditor gridStateTextBox;
+    juce::Label gridStateLabel;
     
-    // Interval controls
-    juce::Label intervalLabel;
-    juce::ComboBox intervalTypeBox;
-    juce::ComboBox intervalValueBox;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> intervalTypeAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> intervalValueAttachment;
-    
-    // Removed column mapping and control mode controls since they're now in the sample settings tabs
+    // Interval controls - Removed as they've been moved to the main tab
     
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> randomizeAttachment;
     

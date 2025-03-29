@@ -40,6 +40,38 @@ void Grid::initialize(bool randomize)
     gridHasUpdated = true;
 }
 
+void Grid::initializeWithDensity(float density)
+{
+    // Clamp density to valid range (0.0-1.0)
+    density = juce::jlimit(0.0f, 1.0f, density);
+    
+    // Clear the grid first
+    for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
+    {
+        for (int x = 0; x < ParameterManager::GRID_SIZE; ++x)
+        {
+            grid[y][x] = false;
+            nextGrid[y][x] = false;
+            previousGrid[y][x] = false;
+        }
+    }
+    
+    // Set random cells to alive based on the density
+    auto& random = juce::Random::getSystemRandom();
+    
+    for (int y = 0; y < ParameterManager::GRID_SIZE; ++y)
+    {
+        for (int x = 0; x < ParameterManager::GRID_SIZE; ++x)
+        {
+            // Probability of a cell being alive is determined by density
+            grid[y][x] = (random.nextFloat() < density);
+            previousGrid[y][x] = grid[y][x];
+        }
+    }
+    
+    gridHasUpdated = true;
+}
+
 void Grid::update()
 {
     // Save current grid state to previous grid

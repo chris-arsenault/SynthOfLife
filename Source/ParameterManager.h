@@ -76,6 +76,12 @@ public:
     juce::AudioParameterChoice* getScaleParam();
     juce::AudioParameterChoice* getRootNoteParam();
     
+    // Section iteration parameters
+    juce::AudioParameterInt* getSectionBarsParam(int sectionIndex);
+    juce::AudioParameterInt* getSectionGridStateParam(int sectionIndex);
+    juce::AudioParameterBool* getSectionRandomizeParam(int sectionIndex);
+    juce::AudioParameterFloat* getSectionDensityParam(int sectionIndex);
+    
     // Get sample for column (now direct 1:1 mapping)
     int getSampleForColumn(int column) const;
     
@@ -134,23 +140,26 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     
     // Parameter pointers
-    juce::AudioParameterFloat* volumeParams[NUM_SAMPLES];
-    juce::AudioParameterFloat* panParams[NUM_SAMPLES];
-    juce::AudioParameterBool* muteParams[NUM_SAMPLES];
-    juce::AudioParameterInt* midiNoteParams[NUM_SAMPLES];
-    juce::AudioParameterInt* polyphonyParams[NUM_SAMPLES];
-    juce::AudioParameterChoice* controlModeParams[NUM_SAMPLES]; 
+    std::vector<juce::AudioParameterFloat*> volumeParams;
+    std::vector<juce::AudioParameterFloat*> panParams;
+    std::vector<juce::AudioParameterBool*> muteParams;
+    std::vector<juce::AudioParameterInt*> midiNoteParams;
+    std::vector<juce::AudioParameterInt*> polyphonyParams;
+    std::vector<juce::AudioParameterChoice*> controlModeParams;
+    std::vector<juce::AudioParameterBool*> legatoParams;
+    std::vector<juce::AudioParameterFloat*> attackParams;
+    std::vector<juce::AudioParameterFloat*> decayParams;
+    std::vector<juce::AudioParameterFloat*> sustainParams;
+    std::vector<juce::AudioParameterFloat*> releaseParams;
     
-    juce::AudioParameterBool* legatoParams[NUM_SAMPLES];
+    juce::AudioParameterChoice* intervalTypeParam = nullptr;
+    juce::AudioParameterChoice* intervalValueParam = nullptr;
+    juce::AudioParameterChoice* musicalScaleParam = nullptr;
+    juce::AudioParameterChoice* rootNoteParam = nullptr;
     
-    juce::AudioParameterFloat* attackParams[NUM_SAMPLES];
-    juce::AudioParameterFloat* decayParams[NUM_SAMPLES];
-    juce::AudioParameterFloat* sustainParams[NUM_SAMPLES];
-    juce::AudioParameterFloat* releaseParams[NUM_SAMPLES];
-    
-    juce::AudioParameterChoice* intervalTypeParam;
-    juce::AudioParameterChoice* intervalValueParam;
-    
-    juce::AudioParameterChoice* musicalScaleParam;
-    juce::AudioParameterChoice* rootNoteParam;
+    // Section iteration parameters
+    juce::AudioParameterInt* sectionBarsParams[4] = { nullptr };
+    juce::AudioParameterInt* sectionGridStateParams[4] = { nullptr };
+    juce::AudioParameterBool* sectionRandomizeParams[4] = { nullptr };
+    juce::AudioParameterFloat* sectionDensityParams[4] = { nullptr };
 };

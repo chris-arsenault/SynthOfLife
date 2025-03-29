@@ -28,6 +28,12 @@ public:
         grid.initialize(randomize);
     }
     
+    // Initialize the grid with a specific density (0.0-1.0)
+    void initializeWithDensity(float density)
+    {
+        grid.initializeWithDensity(density);
+    }
+    
     // Update the grid to the next generation
     void update()
     {
